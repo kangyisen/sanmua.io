@@ -1,0 +1,707 @@
+<!doctype html>
+<html>
+<head>
+<meta charset='UTF-8'><meta name='viewport' content='width=device-width initial-scale=1'><style type='text/css'>html {overflow-x: initial !important;}</style>
+<style type='text/css'  id="style-base">:root { --bg-color: #ffffff; --text-color: #333333; --select-text-bg-color: #B5D6FC; --select-text-font-color: auto; --monospace: "Lucida Console",Consolas,"Courier",monospace; --title-bar-height: 20px; }
+.mac-os-11 { --title-bar-height: 28px; }
+html { font-size: 14px; background-color: var(--bg-color); color: var(--text-color); font-family: "Helvetica Neue", Helvetica, Arial, "Segoe UI Emoji", "SF Pro", sans-serif; -webkit-font-smoothing: antialiased; }
+h1, h2, h3, h4, h5 { white-space: pre-wrap; }
+body { margin: 0px; padding: 0px; height: auto; inset: 0px; font-size: 1rem; line-height: 1.42857; overflow-x: hidden; background: inherit; }
+iframe { margin: auto; }
+a.url { word-break: break-all; }
+a:active, a:hover { outline: 0px; }
+.in-text-selection, ::selection { text-shadow: none; background: var(--select-text-bg-color); color: var(--select-text-font-color); }
+#write { margin: 0px auto; height: auto; width: inherit; word-break: normal; overflow-wrap: break-word; position: relative; white-space: normal; overflow-x: visible; padding-top: 36px; }
+#write.first-line-indent p { text-indent: 2em; }
+#write.first-line-indent li p, #write.first-line-indent p *, #write.first-line-indent svg * { text-indent: 0px; }
+#write.first-line-indent li { margin-left: 2em; }
+.for-image #write { padding-left: 8px; padding-right: 8px; }
+body.typora-export { padding-left: 30px; padding-right: 30px; }
+.typora-export .footnote-line, .typora-export li, .typora-export p { white-space: pre-wrap; }
+.typora-export .task-list-item input { pointer-events: none; }
+@media screen and (max-width: 500px) {
+  body.typora-export { padding-left: 0px; padding-right: 0px; }
+  #write { padding-left: 20px; padding-right: 20px; }
+}
+#write li > figure:last-child { margin-bottom: 0.5rem; }
+#write ol, #write ul { position: relative; }
+img { max-width: 100%; vertical-align: middle; image-orientation: from-image; }
+button, input, select, textarea { color: inherit; font: inherit; }
+input[type="checkbox"], input[type="radio"] { line-height: normal; padding: 0px; }
+*, ::after, ::before { box-sizing: border-box; }
+#write h1, #write h2, #write h3, #write h4, #write h5, #write h6, #write p, #write pre { width: inherit; position: relative; }
+#write svg h1, #write svg h2, #write svg h3, #write svg h4, #write svg h5, #write svg h6, #write svg p { position: static; white-space: nowrap; overflow: visible; }
+foreignobject { overflow: visible; }
+p { line-height: inherit; }
+h1, h2, h3, h4, h5, h6 { break-after: avoid-page; break-inside: avoid; orphans: 4; }
+p { orphans: 4; }
+li p { orphans: 1; }
+h1 { font-size: 2rem; }
+h2 { font-size: 1.8rem; }
+h3 { font-size: 1.6rem; }
+h4 { font-size: 1.4rem; }
+h5 { font-size: 1.2rem; }
+h6 { font-size: 1rem; }
+.md-math-block, .md-rawblock, h1, h2, h3, h4, h5, h6, p { margin-top: 1rem; margin-bottom: 1rem; }
+.hidden { display: none; }
+.md-blockmeta { color: rgb(204, 204, 204); font-weight: 700; font-style: italic; }
+a { cursor: pointer; }
+sup.md-footnote { padding: 2px 4px; background-color: rgba(238, 238, 238, 0.7); color: rgb(85, 85, 85); border-radius: 4px; cursor: pointer; }
+sup.md-footnote a, sup.md-footnote a:hover { color: inherit; text-transform: inherit; text-decoration: inherit; }
+#write input[type="checkbox"] { cursor: pointer; width: inherit; height: inherit; }
+figure { overflow-x: auto; margin: 1.2em 0px; max-width: calc(100% + 16px); padding: 0px; }
+figure > table { margin: 0px; }
+thead, tr { break-inside: avoid; break-after: auto; }
+thead { display: table-header-group; }
+table { border-collapse: collapse; border-spacing: 0px; width: 100%; overflow: auto; break-inside: auto; text-align: left; }
+table.md-table td { min-width: 32px; }
+.CodeMirror-gutters { border-right: 0px; background-color: inherit; }
+.CodeMirror-linenumber { user-select: none; }
+.CodeMirror { text-align: left; }
+.CodeMirror-placeholder { opacity: 0.3; }
+.CodeMirror pre { padding: 0px 4px; }
+.CodeMirror-lines { padding: 0px; }
+div.hr:focus { cursor: none; }
+#write pre { white-space: pre-wrap; }
+#write.fences-no-line-wrapping pre { white-space: pre; }
+#write pre.ty-contain-cm { white-space: normal; }
+.CodeMirror-gutters { margin-right: 4px; }
+.md-fences { font-size: 0.9rem; display: block; break-inside: avoid; text-align: left; overflow: visible; white-space: pre; background: inherit; position: relative !important; }
+.md-fences-adv-panel { width: 100%; margin-top: 10px; text-align: center; padding-top: 0px; padding-bottom: 8px; overflow-x: auto; }
+#write .md-fences.mock-cm { white-space: pre-wrap; }
+.md-fences.md-fences-with-lineno { padding-left: 0px; }
+#write.fences-no-line-wrapping .md-fences.mock-cm { white-space: pre; overflow-x: auto; }
+.md-fences.mock-cm.md-fences-with-lineno { padding-left: 8px; }
+.CodeMirror-line, twitterwidget { break-inside: avoid; }
+svg { break-inside: avoid; }
+.footnotes { opacity: 0.8; font-size: 0.9rem; margin-top: 1em; margin-bottom: 1em; }
+.footnotes + .footnotes { margin-top: 0px; }
+.md-reset { margin: 0px; padding: 0px; border: 0px; outline: 0px; vertical-align: top; background: 0px 0px; text-decoration: none; text-shadow: none; float: none; position: static; width: auto; height: auto; white-space: nowrap; cursor: inherit; -webkit-tap-highlight-color: transparent; line-height: normal; font-weight: 400; text-align: left; box-sizing: content-box; direction: ltr; }
+li div { padding-top: 0px; }
+blockquote { margin: 1rem 0px; }
+li .mathjax-block, li p { margin: 0.5rem 0px; }
+li blockquote { margin: 1rem 0px; }
+li { margin: 0px; position: relative; }
+blockquote > :last-child { margin-bottom: 0px; }
+blockquote > :first-child, li > :first-child { margin-top: 0px; }
+.footnotes-area { color: rgb(136, 136, 136); margin-top: 0.714rem; padding-bottom: 0.143rem; white-space: normal; }
+#write .footnote-line { white-space: pre-wrap; }
+@media print {
+  body, html { border: 1px solid transparent; height: 99%; break-after: avoid; break-before: avoid; font-variant-ligatures: no-common-ligatures; }
+  #write { margin-top: 0px; border-color: transparent !important; padding-top: 0px !important; padding-bottom: 0px !important; }
+  .typora-export * { -webkit-print-color-adjust: exact; }
+  .typora-export #write { break-after: avoid; }
+  .typora-export #write::after { height: 0px; }
+  .is-mac table { break-inside: avoid; }
+  #write > p:nth-child(1) { margin-top: 0px; }
+  .typora-export-show-outline .typora-export-sidebar { display: none; }
+  figure { overflow-x: visible; }
+}
+.footnote-line { margin-top: 0.714em; font-size: 0.7em; }
+a img, img a { cursor: pointer; }
+pre.md-meta-block { font-size: 0.8rem; min-height: 0.8rem; white-space: pre-wrap; background: rgb(204, 204, 204); display: block; overflow-x: hidden; }
+p > .md-image:only-child:not(.md-img-error) img, p > img:only-child { display: block; margin: auto; }
+#write.first-line-indent p > .md-image:only-child:not(.md-img-error) img { left: -2em; position: relative; }
+p > .md-image:only-child { display: inline-block; width: 100%; }
+#write .MathJax_Display { margin: 0.8em 0px 0px; }
+.md-math-block { width: 100%; }
+.md-math-block:not(:empty)::after { display: none; }
+.MathJax_ref { fill: currentcolor; }
+[contenteditable="true"]:active, [contenteditable="true"]:focus, [contenteditable="false"]:active, [contenteditable="false"]:focus { outline: 0px; box-shadow: none; }
+.md-task-list-item { position: relative; list-style-type: none; }
+.task-list-item.md-task-list-item { padding-left: 0px; }
+.md-task-list-item > input { position: absolute; top: 0px; left: 0px; margin-left: -1.2em; margin-top: calc(1em - 10px); border: none; }
+.math { font-size: 1rem; }
+.md-toc { min-height: 3.58rem; position: relative; font-size: 0.9rem; border-radius: 10px; }
+.md-toc-content { position: relative; margin-left: 0px; }
+.md-toc-content::after, .md-toc::after { display: none; }
+.md-toc-item { display: block; color: rgb(65, 131, 196); }
+.md-toc-item a { text-decoration: none; }
+.md-toc-inner:hover { text-decoration: underline; }
+.md-toc-inner { display: inline-block; cursor: pointer; }
+.md-toc-h1 .md-toc-inner { margin-left: 0px; font-weight: 700; }
+.md-toc-h2 .md-toc-inner { margin-left: 2em; }
+.md-toc-h3 .md-toc-inner { margin-left: 4em; }
+.md-toc-h4 .md-toc-inner { margin-left: 6em; }
+.md-toc-h5 .md-toc-inner { margin-left: 8em; }
+.md-toc-h6 .md-toc-inner { margin-left: 10em; }
+@media screen and (max-width: 48em) {
+  .md-toc-h3 .md-toc-inner { margin-left: 3.5em; }
+  .md-toc-h4 .md-toc-inner { margin-left: 5em; }
+  .md-toc-h5 .md-toc-inner { margin-left: 6.5em; }
+  .md-toc-h6 .md-toc-inner { margin-left: 8em; }
+}
+a.md-toc-inner { font-size: inherit; font-style: inherit; font-weight: inherit; line-height: inherit; }
+.footnote-line a:not(.reversefootnote) { color: inherit; }
+.reversefootnote { font-family: ui-monospace, sans-serif; }
+.md-attr { display: none; }
+.md-fn-count::after { content: "."; }
+code, pre, samp, tt { font-family: var(--monospace); }
+kbd { margin: 0px 0.1em; padding: 0.1em 0.6em; font-size: 0.8em; color: rgb(36, 39, 41); background: rgb(255, 255, 255); border: 1px solid rgb(173, 179, 185); border-radius: 3px; box-shadow: rgba(12, 13, 14, 0.2) 0px 1px 0px, rgb(255, 255, 255) 0px 0px 0px 2px inset; white-space: nowrap; vertical-align: middle; }
+.md-comment { color: rgb(162, 127, 3); opacity: 0.6; font-family: var(--monospace); }
+code { text-align: left; vertical-align: initial; }
+a.md-print-anchor { white-space: pre !important; border-width: initial !important; border-style: none !important; border-color: initial !important; display: inline-block !important; position: absolute !important; width: 1px !important; right: 0px !important; outline: 0px !important; background: 0px 0px !important; text-decoration: initial !important; text-shadow: initial !important; }
+.os-windows.monocolor-emoji .md-emoji { font-family: "Segoe UI Symbol", sans-serif; }
+.md-diagram-panel > svg { max-width: 100%; }
+[lang="flow"] svg, [lang="mermaid"] svg { max-width: 100%; height: auto; }
+[lang="mermaid"] .node text { font-size: 1rem; }
+table tr th { border-bottom: 0px; }
+video { max-width: 100%; display: block; margin: 0px auto; }
+iframe { max-width: 100%; width: 100%; border: none; }
+.highlight td, .highlight tr { border: 0px; }
+mark { background: rgb(255, 255, 0); color: rgb(0, 0, 0); }
+.md-html-inline .md-plain, .md-html-inline strong, mark .md-inline-math, mark strong { color: inherit; }
+.md-expand mark .md-meta { opacity: 0.3 !important; }
+mark .md-meta { color: rgb(0, 0, 0); }
+@media print {
+  .typora-export h1, .typora-export h2, .typora-export h3, .typora-export h4, .typora-export h5, .typora-export h6 { break-inside: avoid; }
+}
+.md-diagram-panel .messageText { stroke: none !important; }
+.md-diagram-panel .start-state { fill: var(--node-fill); }
+.md-diagram-panel .edgeLabel rect { opacity: 1 !important; }
+.md-fences.md-fences-math { font-size: 1em; }
+.md-fences-advanced:not(.md-focus) { padding: 0px; white-space: nowrap; border: 0px; }
+.md-fences-advanced:not(.md-focus) { background: inherit; }
+.mermaid-svg { margin: auto; }
+.typora-export-show-outline .typora-export-content { max-width: 1440px; margin: auto; display: flex; flex-direction: row; }
+.typora-export-sidebar { width: 300px; font-size: 0.8rem; margin-top: 80px; margin-right: 18px; }
+.typora-export-show-outline #write { --webkit-flex: 2; flex: 2 1 0%; }
+.typora-export-sidebar .outline-content { position: fixed; top: 0px; max-height: 100%; overflow: hidden auto; padding-bottom: 30px; padding-top: 60px; width: 300px; }
+@media screen and (max-width: 1024px) {
+  .typora-export-sidebar, .typora-export-sidebar .outline-content { width: 240px; }
+}
+@media screen and (max-width: 800px) {
+  .typora-export-sidebar { display: none; }
+}
+.outline-content li, .outline-content ul { margin-left: 0px; margin-right: 0px; padding-left: 0px; padding-right: 0px; list-style: none; overflow-wrap: anywhere; }
+.outline-content ul { margin-top: 0px; margin-bottom: 0px; }
+.outline-content strong { font-weight: 400; }
+.outline-expander { width: 1rem; height: 1.42857rem; position: relative; display: table-cell; vertical-align: middle; cursor: pointer; padding-left: 4px; }
+.outline-expander::before { content: ""; position: relative; font-family: Ionicons; display: inline-block; font-size: 8px; vertical-align: middle; }
+.outline-item { padding-top: 3px; padding-bottom: 3px; cursor: pointer; }
+.outline-expander:hover::before { content: ""; }
+.outline-h1 > .outline-item { padding-left: 0px; }
+.outline-h2 > .outline-item { padding-left: 1em; }
+.outline-h3 > .outline-item { padding-left: 2em; }
+.outline-h4 > .outline-item { padding-left: 3em; }
+.outline-h5 > .outline-item { padding-left: 4em; }
+.outline-h6 > .outline-item { padding-left: 5em; }
+.outline-label { cursor: pointer; display: table-cell; vertical-align: middle; text-decoration: none; color: inherit; }
+.outline-label:hover { text-decoration: underline; }
+.outline-item:hover { border-color: rgb(245, 245, 245); background-color: var(--item-hover-bg-color); }
+.outline-item:hover { margin-left: -28px; margin-right: -28px; border-left: 28px solid transparent; border-right: 28px solid transparent; }
+.outline-item-single .outline-expander::before, .outline-item-single .outline-expander:hover::before { display: none; }
+.outline-item-open > .outline-item > .outline-expander::before { content: ""; }
+.outline-children { display: none; }
+.info-panel-tab-wrapper { display: none; }
+.outline-item-open > .outline-children { display: block; }
+.typora-export .outline-item { padding-top: 1px; padding-bottom: 1px; }
+.typora-export .outline-item:hover { margin-right: -8px; border-right: 8px solid transparent; }
+.typora-export .outline-expander::before { content: "+"; font-family: inherit; top: -1px; }
+.typora-export .outline-expander:hover::before, .typora-export .outline-item-open > .outline-item > .outline-expander::before { content: "−"; }
+.typora-export-collapse-outline .outline-children { display: none; }
+.typora-export-collapse-outline .outline-item-open > .outline-children, .typora-export-no-collapse-outline .outline-children { display: block; }
+.typora-export-no-collapse-outline .outline-expander::before { content: "" !important; }
+.typora-export-show-outline .outline-item-active > .outline-item .outline-label { font-weight: 700; }
+.md-inline-math-container mjx-container { zoom: 0.95; }
+mjx-container { break-inside: avoid; }
+.md-alert.md-alert-note { border-left-color: rgb(9, 105, 218); }
+.md-alert.md-alert-important { border-left-color: rgb(130, 80, 223); }
+.md-alert.md-alert-warning { border-left-color: rgb(154, 103, 0); }
+.md-alert.md-alert-tip { border-left-color: rgb(31, 136, 61); }
+.md-alert.md-alert-caution { border-left-color: rgb(207, 34, 46); }
+.md-alert { padding: 0px 1em; margin-bottom: 16px; color: inherit; border-left: 0.25em solid rgb(0, 0, 0); }
+.md-alert-text-note { color: rgb(9, 105, 218); }
+.md-alert-text-important { color: rgb(130, 80, 223); }
+.md-alert-text-warning { color: rgb(154, 103, 0); }
+.md-alert-text-tip { color: rgb(31, 136, 61); }
+.md-alert-text-caution { color: rgb(207, 34, 46); }
+.md-alert-text { font-size: 0.9rem; font-weight: 700; }
+.md-alert-text svg { fill: currentcolor; position: relative; top: 0.125em; margin-right: 1ch; overflow: visible; }
+.md-alert-text-container::after { content: attr(data-text); text-transform: capitalize; pointer-events: none; margin-right: 1ch; }
+
+</style>
+<style type='text/css'  id="style-codemirror">.CodeMirror { height: auto; }
+.CodeMirror.cm-s-inner { background: inherit; }
+.CodeMirror-scroll { overflow: auto hidden; z-index: 3; }
+.CodeMirror-gutter-filler, .CodeMirror-scrollbar-filler { background-color: rgb(255, 255, 255); }
+.CodeMirror-gutters { border-right: 1px solid rgb(221, 221, 221); background: inherit; white-space: nowrap; }
+.CodeMirror-linenumber { padding: 0px 3px 0px 5px; text-align: right; color: rgb(153, 153, 153); }
+.cm-s-inner .cm-keyword { color: rgb(119, 0, 136); }
+.cm-s-inner .cm-atom, .cm-s-inner.cm-atom { color: rgb(34, 17, 153); }
+.cm-s-inner .cm-number { color: rgb(17, 102, 68); }
+.cm-s-inner .cm-def { color: rgb(0, 0, 255); }
+.cm-s-inner .cm-variable { color: rgb(0, 0, 0); }
+.cm-s-inner .cm-variable-2 { color: rgb(0, 85, 170); }
+.cm-s-inner .cm-variable-3 { color: rgb(0, 136, 85); }
+.cm-s-inner .cm-string { color: rgb(170, 17, 17); }
+.cm-s-inner .cm-property { color: rgb(0, 0, 0); }
+.cm-s-inner .cm-operator { color: rgb(152, 26, 26); }
+.cm-s-inner .cm-comment, .cm-s-inner.cm-comment { color: rgb(170, 85, 0); }
+.cm-s-inner .cm-string-2 { color: rgb(255, 85, 0); }
+.cm-s-inner .cm-meta { color: rgb(85, 85, 85); }
+.cm-s-inner .cm-qualifier { color: rgb(85, 85, 85); }
+.cm-s-inner .cm-builtin { color: rgb(51, 0, 170); }
+.cm-s-inner .cm-bracket { color: rgb(153, 153, 119); }
+.cm-s-inner .cm-tag { color: rgb(17, 119, 0); }
+.cm-s-inner .cm-attribute { color: rgb(0, 0, 204); }
+.cm-s-inner .cm-header, .cm-s-inner.cm-header { color: rgb(0, 0, 255); }
+.cm-s-inner .cm-quote, .cm-s-inner.cm-quote { color: rgb(0, 153, 0); }
+.cm-s-inner .cm-hr, .cm-s-inner.cm-hr { color: rgb(153, 153, 153); }
+.cm-s-inner .cm-link, .cm-s-inner.cm-link { color: rgb(0, 0, 204); }
+.cm-negative { color: rgb(221, 68, 68); }
+.cm-positive { color: rgb(34, 153, 34); }
+.cm-header, .cm-strong { font-weight: 700; }
+.cm-del { text-decoration: line-through; }
+.cm-em { font-style: italic; }
+.cm-link { text-decoration: underline; }
+.cm-error { color: red; }
+.cm-invalidchar { color: red; }
+.cm-constant { color: rgb(38, 139, 210); }
+.cm-defined { color: rgb(181, 137, 0); }
+div.CodeMirror span.CodeMirror-matchingbracket { color: rgb(0, 255, 0); }
+div.CodeMirror span.CodeMirror-nonmatchingbracket { color: rgb(255, 34, 34); }
+.cm-s-inner .CodeMirror-activeline-background { background: inherit; }
+.CodeMirror { position: relative; overflow: hidden; }
+.CodeMirror-scroll { height: 100%; outline: 0px; position: relative; box-sizing: content-box; background: inherit; }
+.CodeMirror-sizer { position: relative; }
+.CodeMirror-gutter-filler, .CodeMirror-hscrollbar, .CodeMirror-scrollbar-filler, .CodeMirror-vscrollbar { position: absolute; z-index: 6; display: none; outline: 0px; }
+.CodeMirror-vscrollbar { right: 0px; top: 0px; overflow: hidden; }
+.CodeMirror-hscrollbar { bottom: 0px; left: 0px; overflow: auto hidden; }
+.CodeMirror-scrollbar-filler { right: 0px; bottom: 0px; }
+.CodeMirror-gutter-filler { left: 0px; bottom: 0px; }
+.CodeMirror-gutters { position: absolute; left: 0px; top: 0px; padding-bottom: 10px; z-index: 3; overflow-y: hidden; }
+.CodeMirror-gutter { white-space: normal; height: 100%; box-sizing: content-box; padding-bottom: 30px; margin-bottom: -32px; display: inline-block; }
+.CodeMirror-gutter-wrapper { position: absolute; z-index: 4; background: 0px 0px !important; border: none !important; }
+.CodeMirror-gutter-background { position: absolute; top: 0px; bottom: 0px; z-index: 4; }
+.CodeMirror-gutter-elt { position: absolute; cursor: default; z-index: 4; }
+.CodeMirror-lines { cursor: text; }
+.CodeMirror pre { border-radius: 0px; border-width: 0px; background: 0px 0px; font-family: inherit; font-size: inherit; margin: 0px; white-space: pre; overflow-wrap: normal; color: inherit; z-index: 2; position: relative; overflow: visible; }
+.CodeMirror-wrap pre { overflow-wrap: break-word; white-space: pre-wrap; word-break: normal; }
+.CodeMirror-code pre { border-right: 30px solid transparent; width: fit-content; }
+.CodeMirror-wrap .CodeMirror-code pre { border-right: none; width: auto; }
+.CodeMirror-linebackground { position: absolute; inset: 0px; z-index: 0; }
+.CodeMirror-linewidget { position: relative; z-index: 2; overflow: auto; }
+.CodeMirror-wrap .CodeMirror-scroll { overflow-x: hidden; }
+.CodeMirror-measure { position: absolute; width: 100%; height: 0px; overflow: hidden; visibility: hidden; }
+.CodeMirror-measure pre { position: static; }
+.CodeMirror div.CodeMirror-cursor { position: absolute; visibility: hidden; border-right: none; width: 0px; }
+.CodeMirror div.CodeMirror-cursor { visibility: hidden; }
+.CodeMirror-focused div.CodeMirror-cursor { visibility: inherit; }
+.cm-searching { background: rgba(255, 255, 0, 0.4); }
+span.cm-underlined { text-decoration: underline; }
+span.cm-strikethrough { text-decoration: line-through; }
+.cm-tw-syntaxerror { color: rgb(255, 255, 255); background-color: rgb(153, 0, 0); }
+.cm-tw-deleted { text-decoration: line-through; }
+.cm-tw-header5 { font-weight: 700; }
+.cm-tw-listitem:first-child { padding-left: 10px; }
+.cm-tw-box { border-style: solid; border-right-width: 1px; border-bottom-width: 1px; border-left-width: 1px; border-color: inherit; border-top-width: 0px !important; }
+.cm-tw-underline { text-decoration: underline; }
+@media print {
+  .CodeMirror div.CodeMirror-cursor { visibility: hidden; }
+}
+
+</style>
+<link rel='stylesheet' href='https://fonts.googleapis.com/css?family=Open+Sans:400italic,700italic,700,400&amp;subset=latin,latin-ext' type='text/css' />
+<style type='text/css'  id="style-theme_css">:root {
+    --side-bar-bg-color: #fafafa;
+    --control-text-color: #777;
+}
+
+@include-when-export url(https://fonts.googleapis.com/css?family=Open+Sans:400italic,700italic,700,400&subset=latin,latin-ext);
+
+/* open-sans-regular - latin-ext_latin */
+  /* open-sans-italic - latin-ext_latin */
+    /* open-sans-700 - latin-ext_latin */
+    /* open-sans-700italic - latin-ext_latin */
+  html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+}
+
+body {
+    font-family: "Open Sans","Clear Sans", "Helvetica Neue", Helvetica, Arial, 'Segoe UI Emoji', 'SF Pro', sans-serif;
+    color: rgb(51, 51, 51);
+    line-height: 1.6;
+}
+
+#write {
+    max-width: 860px;
+  	margin: 0 auto;
+  	padding: 30px;
+    padding-bottom: 100px;
+}
+
+@media only screen and (min-width: 1400px) {
+	#write {
+		max-width: 1024px;
+	}
+}
+
+@media only screen and (min-width: 1800px) {
+	#write {
+		max-width: 1200px;
+	}
+}
+
+#write > ul:first-child,
+#write > ol:first-child{
+    margin-top: 30px;
+}
+
+a {
+    color: #4183C4;
+}
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    position: relative;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    font-weight: bold;
+    line-height: 1.4;
+    cursor: text;
+}
+h1:hover a.anchor,
+h2:hover a.anchor,
+h3:hover a.anchor,
+h4:hover a.anchor,
+h5:hover a.anchor,
+h6:hover a.anchor {
+    text-decoration: none;
+}
+h1 tt,
+h1 code {
+    font-size: inherit;
+}
+h2 tt,
+h2 code {
+    font-size: inherit;
+}
+h3 tt,
+h3 code {
+    font-size: inherit;
+}
+h4 tt,
+h4 code {
+    font-size: inherit;
+}
+h5 tt,
+h5 code {
+    font-size: inherit;
+}
+h6 tt,
+h6 code {
+    font-size: inherit;
+}
+h1 {
+    font-size: 2.25em;
+    line-height: 1.2;
+    border-bottom: 1px solid #eee;
+}
+h2 {
+    font-size: 1.75em;
+    line-height: 1.225;
+    border-bottom: 1px solid #eee;
+}
+
+/*@media print {
+    .typora-export h1,
+    .typora-export h2 {
+        border-bottom: none;
+        padding-bottom: initial;
+    }
+
+    .typora-export h1::after,
+    .typora-export h2::after {
+        content: "";
+        display: block;
+        height: 100px;
+        margin-top: -96px;
+        border-top: 1px solid #eee;
+    }
+}*/
+
+h3 {
+    font-size: 1.5em;
+    line-height: 1.43;
+}
+h4 {
+    font-size: 1.25em;
+}
+h5 {
+    font-size: 1em;
+}
+h6 {
+   font-size: 1em;
+    color: #777;
+}
+p,
+blockquote,
+ul,
+ol,
+dl,
+table{
+    margin: 0.8em 0;
+}
+li>ol,
+li>ul {
+    margin: 0 0;
+}
+hr {
+    height: 2px;
+    padding: 0;
+    margin: 16px 0;
+    background-color: #e7e7e7;
+    border: 0 none;
+    overflow: hidden;
+    box-sizing: content-box;
+}
+
+li p.first {
+    display: inline-block;
+}
+ul,
+ol {
+    padding-left: 30px;
+}
+ul:first-child,
+ol:first-child {
+    margin-top: 0;
+}
+ul:last-child,
+ol:last-child {
+    margin-bottom: 0;
+}
+blockquote {
+    border-left: 4px solid #dfe2e5;
+    padding: 0 15px;
+    color: #777777;
+}
+blockquote blockquote {
+    padding-right: 0;
+}
+table {
+    padding: 0;
+    word-break: initial;
+}
+table tr {
+    border: 1px solid #dfe2e5;
+    margin: 0;
+    padding: 0;
+}
+table tr:nth-child(2n),
+thead {
+    background-color: #f8f8f8;
+}
+table th {
+    font-weight: bold;
+    border: 1px solid #dfe2e5;
+    border-bottom: 0;
+    margin: 0;
+    padding: 6px 13px;
+}
+table td {
+    border: 1px solid #dfe2e5;
+    margin: 0;
+    padding: 6px 13px;
+}
+table th:first-child,
+table td:first-child {
+    margin-top: 0;
+}
+table th:last-child,
+table td:last-child {
+    margin-bottom: 0;
+}
+
+.CodeMirror-lines {
+    padding-left: 4px;
+}
+
+.code-tooltip {
+    box-shadow: 0 1px 1px 0 rgba(0,28,36,.3);
+    border-top: 1px solid #eef2f2;
+}
+
+.md-fences,
+code,
+tt {
+    border: 1px solid #e7eaed;
+    background-color: #f8f8f8;
+    border-radius: 3px;
+    padding: 0;
+    padding: 2px 4px 0px 4px;
+    font-size: 0.9em;
+}
+
+code {
+    background-color: #f3f4f4;
+    padding: 0 2px 0 2px;
+}
+
+.md-fences {
+    margin-bottom: 15px;
+    margin-top: 15px;
+    padding-top: 8px;
+    padding-bottom: 6px;
+}
+
+
+.md-task-list-item > input {
+  margin-left: -1.3em;
+}
+
+@media print {
+    html {
+        font-size: 13px;
+    }
+    pre {
+        page-break-inside: avoid;
+        word-wrap: break-word;
+    }
+}
+
+.md-fences {
+	background-color: #f8f8f8;
+}
+#write pre.md-meta-block {
+	padding: 1rem;
+    font-size: 85%;
+    line-height: 1.45;
+    background-color: #f7f7f7;
+    border: 0;
+    border-radius: 3px;
+    color: #777777;
+    margin-top: 0 !important;
+}
+
+.mathjax-block>.code-tooltip {
+	bottom: .375rem;
+}
+
+.md-mathjax-midline {
+    background: #fafafa;
+}
+
+#write>h3.md-focus:before{
+	left: -1.5625rem;
+	top: .375rem;
+}
+#write>h4.md-focus:before{
+	left: -1.5625rem;
+	top: .285714286rem;
+}
+#write>h5.md-focus:before{
+	left: -1.5625rem;
+	top: .285714286rem;
+}
+#write>h6.md-focus:before{
+	left: -1.5625rem;
+	top: .285714286rem;
+}
+.md-image>.md-meta {
+    /*border: 1px solid #ddd;*/
+    border-radius: 3px;
+    padding: 2px 0px 0px 4px;
+    font-size: 0.9em;
+    color: inherit;
+}
+
+.md-tag {
+    color: #a7a7a7;
+    opacity: 1;
+}
+
+.md-toc { 
+    margin-top:20px;
+    padding-bottom:20px;
+}
+
+.sidebar-tabs {
+    border-bottom: none;
+}
+
+#typora-quick-open {
+    border: 1px solid #ddd;
+    background-color: #f8f8f8;
+}
+
+#typora-quick-open-item {
+    background-color: #FAFAFA;
+    border-color: #FEFEFE #e5e5e5 #e5e5e5 #eee;
+    border-style: solid;
+    border-width: 1px;
+}
+
+/** focus mode */
+.on-focus-mode blockquote {
+    border-left-color: rgba(85, 85, 85, 0.12);
+}
+
+header, .context-menu, .megamenu-content, footer{
+    font-family: "Segoe UI", "Arial", sans-serif;
+}
+
+.file-node-content:hover .file-node-icon,
+.file-node-content:hover .file-node-open-state{
+    visibility: visible;
+}
+
+.mac-seamless-mode #typora-sidebar {
+    background-color: #fafafa;
+    background-color: var(--side-bar-bg-color);
+}
+
+.mac-os #write{
+    caret-color: AccentColor;
+}
+
+.md-lang {
+    color: #b4654d;
+}
+
+/*.html-for-mac {
+    --item-hover-bg-color: #E6F0FE;
+}*/
+
+#md-notification .btn {
+    border: 0;
+}
+
+.dropdown-menu .divider {
+    border-color: #e5e5e5;
+    opacity: 0.4;
+}
+
+.ty-preferences .window-content {
+    background-color: #fafafa;
+}
+
+.ty-preferences .nav-group-item.active {
+    color: white;
+    background: #999;
+}
+
+.menu-item-container a.menu-style-btn {
+    background-color: #f5f8fa;
+    background-image: linear-gradient( 180deg , hsla(0, 0%, 100%, 0.8), hsla(0, 0%, 100%, 0)); 
+}
+</style>
+<style type='text/css'  id="style-lp">ol, ul {padding-left: 40px}</style>
+
+<title>新学</title>
+</head>
+<body class='typora-export os-windows'><div class='typora-export-content'>
+<div id='write'  class=''><h1 id='树的重心'><span>树的重心</span></h1><p><a href='https://vjudge.net/problem/洛谷-P1395'><span>会议</span></a></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="cpp" style="break-inside: unset;"><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang="cpp"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.52344px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-meta">#include&lt;iostream&gt;</span></span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-meta">#include&lt;cmath&gt;</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-meta">#include&lt;cstdio&gt;</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-meta">#include&lt;algorithm&gt;</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-keyword">using</span> <span class="cm-keyword">namespace</span> <span class="cm-def">std</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-keyword">const</span> <span class="cm-variable-3">int</span> <span class="cm-variable">p</span><span class="cm-operator">=</span><span class="cm-number">50001</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-variable">n</span>,<span class="cm-variable">hason</span>[<span class="cm-variable">p</span>],<span class="cm-variable">f</span>[<span class="cm-variable">p</span>],<span class="cm-variable">yy</span><span class="cm-operator">=</span><span class="cm-number">1</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-variable">u</span>,<span class="cm-variable">v</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-variable">tot</span>,<span class="cm-variable">la</span>[<span class="cm-variable">p</span><span class="cm-operator">*</span><span class="cm-number">2</span>],<span class="cm-variable">to</span>[<span class="cm-variable">p</span><span class="cm-operator">*</span><span class="cm-number">2</span>],<span class="cm-variable">h</span>[<span class="cm-variable">p</span>];</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">void</span> <span class="cm-def">hsb</span>(<span class="cm-variable-3">int</span> <span class="cm-variable">x</span>,<span class="cm-variable-3">int</span> <span class="cm-variable">y</span>)</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">{</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">to</span>[<span class="cm-operator">++</span><span class="cm-variable">tot</span>]<span class="cm-operator">=</span><span class="cm-variable">y</span>,</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">la</span>[<span class="cm-variable">tot</span>]<span class="cm-operator">=</span><span class="cm-variable">h</span>[<span class="cm-variable">x</span>],</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">h</span>[<span class="cm-variable">x</span>]<span class="cm-operator">=</span><span class="cm-variable">tot</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">}</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-def">hsc</span>(<span class="cm-variable-3">int</span> <span class="cm-variable">x</span>,<span class="cm-variable-3">int</span> <span class="cm-variable">y</span>)</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">{</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">for</span>(<span class="cm-variable-3">int</span> <span class="cm-variable">i</span><span class="cm-operator">=</span><span class="cm-variable">h</span>[<span class="cm-variable">x</span>];<span class="cm-variable">i</span>;<span class="cm-variable">i</span><span class="cm-operator">=</span><span class="cm-variable">la</span>[<span class="cm-variable">i</span>])</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">if</span>(<span class="cm-variable">to</span>[<span class="cm-variable">i</span>]<span class="cm-operator">!=</span><span class="cm-variable">y</span>)</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">hason</span>[<span class="cm-variable">x</span>]<span class="cm-operator">+=</span><span class="cm-number">1</span><span class="cm-operator">+</span><span class="cm-variable">hsc</span>(<span class="cm-variable">to</span>[<span class="cm-variable">i</span>],<span class="cm-variable">x</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">return</span> <span class="cm-variable">hason</span>[<span class="cm-variable">x</span>];</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">}</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">void</span> <span class="cm-def">hsa</span>(<span class="cm-variable-3">int</span> <span class="cm-variable">x</span>,<span class="cm-variable-3">int</span> <span class="cm-variable">y</span>)</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">{</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">f</span>[<span class="cm-variable">x</span>]<span class="cm-operator">=</span><span class="cm-variable">f</span>[<span class="cm-variable">y</span>]<span class="cm-operator">-</span>(<span class="cm-variable">hason</span>[<span class="cm-variable">x</span>]<span class="cm-operator">+</span><span class="cm-number">1</span>)<span class="cm-operator">+</span>(<span class="cm-variable">n</span><span class="cm-operator">-</span><span class="cm-variable">hason</span>[<span class="cm-variable">x</span>]<span class="cm-operator">-</span><span class="cm-number">1</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">for</span>(<span class="cm-variable-3">int</span> <span class="cm-variable">i</span><span class="cm-operator">=</span><span class="cm-variable">h</span>[<span class="cm-variable">x</span>];<span class="cm-variable">i</span>;<span class="cm-variable">i</span><span class="cm-operator">=</span><span class="cm-variable">la</span>[<span class="cm-variable">i</span>])</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">if</span>(<span class="cm-variable">to</span>[<span class="cm-variable">i</span>]<span class="cm-operator">!=</span><span class="cm-variable">y</span>)<span class="cm-variable">hsa</span>(<span class="cm-variable">to</span>[<span class="cm-variable">i</span>],<span class="cm-variable">x</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">}</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">void</span> <span class="cm-def">hsd</span>(<span class="cm-variable-3">int</span> <span class="cm-variable">x</span>,<span class="cm-variable-3">int</span> <span class="cm-variable">y</span>,<span class="cm-variable-3">int</span> <span class="cm-variable">z</span>)</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">{</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">f</span>[<span class="cm-number">1</span>]<span class="cm-operator">+=</span><span class="cm-variable">z</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">for</span>(<span class="cm-variable-3">int</span> <span class="cm-variable">i</span><span class="cm-operator">=</span><span class="cm-variable">h</span>[<span class="cm-variable">x</span>];<span class="cm-variable">i</span>;<span class="cm-variable">i</span><span class="cm-operator">=</span><span class="cm-variable">la</span>[<span class="cm-variable">i</span>])</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">if</span>(<span class="cm-variable">to</span>[<span class="cm-variable">i</span>]<span class="cm-operator">!=</span><span class="cm-variable">y</span>)</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">hsd</span>(<span class="cm-variable">to</span>[<span class="cm-variable">i</span>],<span class="cm-variable">x</span>,<span class="cm-variable">z</span><span class="cm-operator">+</span><span class="cm-number">1</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">}</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-def">main</span>()</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">{</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">scanf</span>(<span class="cm-string">"%d"</span>,<span class="cm-operator">&amp;</span><span class="cm-variable">n</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">for</span>(<span class="cm-variable-3">int</span> <span class="cm-variable">i</span><span class="cm-operator">=</span><span class="cm-number">1</span>;<span class="cm-variable">i</span><span class="cm-operator">&lt;</span><span class="cm-variable">n</span>;<span class="cm-variable">i</span><span class="cm-operator">++</span>)</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp;  {</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp;<span class="cm-variable">scanf</span>(<span class="cm-string">"%d%d"</span>,<span class="cm-operator">&amp;</span><span class="cm-variable">u</span>,<span class="cm-operator">&amp;</span><span class="cm-variable">v</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp;<span class="cm-variable">hsb</span>(<span class="cm-variable">u</span>,<span class="cm-variable">v</span>),<span class="cm-variable">hsb</span>(<span class="cm-variable">v</span>,<span class="cm-variable">u</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp;  }</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">hsc</span>(<span class="cm-number">1</span>,<span class="cm-number">0</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">for</span>(<span class="cm-variable-3">int</span> <span class="cm-variable">i</span><span class="cm-operator">=</span><span class="cm-variable">h</span>[<span class="cm-number">1</span>];<span class="cm-variable">i</span>;<span class="cm-variable">i</span><span class="cm-operator">=</span><span class="cm-variable">la</span>[<span class="cm-variable">i</span>])</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">hsd</span>(<span class="cm-variable">to</span>[<span class="cm-variable">i</span>],<span class="cm-number">1</span>,<span class="cm-number">1</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">for</span>(<span class="cm-variable-3">int</span> <span class="cm-variable">i</span><span class="cm-operator">=</span><span class="cm-variable">h</span>[<span class="cm-number">1</span>];<span class="cm-variable">i</span>;<span class="cm-variable">i</span><span class="cm-operator">=</span><span class="cm-variable">la</span>[<span class="cm-variable">i</span>])</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">hsa</span>(<span class="cm-variable">to</span>[<span class="cm-variable">i</span>],<span class="cm-number">1</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">for</span>(<span class="cm-variable-3">int</span> <span class="cm-variable">i</span><span class="cm-operator">=</span><span class="cm-number">2</span>;<span class="cm-variable">i</span><span class="cm-operator">&lt;=</span><span class="cm-variable">n</span>;<span class="cm-variable">i</span><span class="cm-operator">++</span>)</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">if</span>(<span class="cm-variable">f</span>[<span class="cm-variable">i</span>]<span class="cm-operator">&lt;</span><span class="cm-variable">f</span>[<span class="cm-variable">yy</span>])<span class="cm-variable">yy</span><span class="cm-operator">=</span><span class="cm-variable">i</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">printf</span>(<span class="cm-string">"%d %d\n"</span>,<span class="cm-variable">yy</span>,<span class="cm-variable">f</span>[<span class="cm-variable">yy</span>]);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">return</span> <span class="cm-number">0</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">}</span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom: 0px solid transparent; top: 1221px;"></div><div class="CodeMirror-gutters" style="display: none; height: 1221px;"></div></div></div></pre><h1 id='set语法'><span>set语法</span></h1><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="cpp"><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang="cpp"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.52344px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-meta">#include&lt;bits/stdc++.h&gt;</span></span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-keyword">using</span> <span class="cm-keyword">namespace</span> <span class="cm-def">std</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-keyword">typedef</span> <span class="cm-variable-3">long</span> <span class="cm-variable-3">long</span> <span class="cm-variable">ll</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">set</span><span class="cm-operator">&lt;</span><span class="cm-variable">ll</span><span class="cm-operator">&gt;</span><span class="cm-variable">a</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-def">main</span>(){</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tab" role="presentation" cm-text="	">    </span><span class="cm-keyword">for</span>(<span class="cm-variable">ll</span> <span class="cm-variable">i</span><span class="cm-operator">=</span><span class="cm-number">1</span>;<span class="cm-variable">i</span><span class="cm-operator">&lt;=</span><span class="cm-number">10</span>;<span class="cm-variable">i</span><span class="cm-operator">++</span>){</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tab" role="presentation" cm-text="	">    </span><span class="cm-tab" role="presentation" cm-text="	">    </span><span class="cm-variable">a</span>.<span class="cm-variable">insert</span>(<span class="cm-variable">i</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tab" role="presentation" cm-text="	">    </span>}</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tab" role="presentation" cm-text="	">    </span><span class="cm-variable">ll</span> <span class="cm-variable">n</span><span class="cm-operator">=</span><span class="cm-number">3</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tab" role="presentation" cm-text="	">    </span><span class="cm-variable">cout</span><span class="cm-operator">&lt;&lt;</span> <span class="cm-operator">*</span><span class="cm-variable">a</span>.<span class="cm-variable">lower_bound</span>(<span class="cm-variable">n</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tab" role="presentation" cm-text="	">    </span><span class="cm-variable">cout</span><span class="cm-operator">&lt;&lt;</span> <span class="cm-operator">*</span><span class="cm-variable">a</span>.<span class="cm-variable">upper_bound</span>(<span class="cm-variable">n</span>); </span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-tab" role="presentation" cm-text="	">    </span><span class="cm-keyword">return</span> <span class="cm-number">0</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">}</span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom: 0px solid transparent; top: 300px;"></div><div class="CodeMirror-gutters" style="display: none; height: 300px;"></div></div></div></pre><h1 id='位运算符'><span>位运算符</span></h1><p><span>在C/C++中，位运算符直接对整数的二进制位进行操作，常用于底层编程、性能优化或特定算法（如位掩码、加密等）。以下是主要的位运算符及其作用：</span></p><hr /><h3 id='1-按位与-'><span>1. </span><strong><span>按位与 </span><code>&amp;</code></strong></h3><ul><li><p><strong><span>作用</span></strong><span>：对两个操作数的每一位执行逻辑与操作（仅当两位均为1时结果为1）。</span></p></li><li><p><strong><span>示例</span></strong><span>：</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="cpp"><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang="cpp"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.52344px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-variable">a</span> <span class="cm-operator">=</span> <span class="cm-number">5</span>; &nbsp; &nbsp;<span class="cm-comment">// 0101</span></span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-variable">b</span> <span class="cm-operator">=</span> <span class="cm-number">3</span>; &nbsp; &nbsp;<span class="cm-comment">// 0011</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-variable">c</span> <span class="cm-operator">=</span> <span class="cm-variable">a</span> <span class="cm-operator">&amp;</span> <span class="cm-variable">b</span>; <span class="cm-comment">// 0001 (十进制1)</span></span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom: 0px solid transparent; top: 69px;"></div><div class="CodeMirror-gutters" style="display: none; height: 69px;"></div></div></div></pre></li><li><p><strong><span>用途</span></strong><span>：</span></p><ul><li><p><span>清除特定位（如 </span><code>x &amp; 0xFE</code><span> 清除最低位）。</span></p></li><li><p><span>检查奇偶性（</span><code>x &amp; 1</code><span> 为0则是偶数）。</span></p></li></ul></li></ul><hr /><h3 id='2-按位或-|'><span>2. </span><strong><span>按位或 </span><code>|</code></strong></h3><ul><li><p><strong><span>作用</span></strong><span>：对每一位执行逻辑或操作（任一位为1时结果为1）。</span></p></li><li><p><strong><span>示例</span></strong><span>：</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="cpp"><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang="cpp"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.52344px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-variable">a</span> <span class="cm-operator">=</span> <span class="cm-number">5</span>; &nbsp; &nbsp;<span class="cm-comment">// 0101</span></span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-variable">b</span> <span class="cm-operator">=</span> <span class="cm-number">3</span>; &nbsp; &nbsp;<span class="cm-comment">// 0011</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-variable">c</span> <span class="cm-operator">=</span> <span class="cm-variable">a</span> <span class="cm-operator">|</span> <span class="cm-variable">b</span>; <span class="cm-comment">// 0111 (十进制7)</span></span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom: 0px solid transparent; top: 69px;"></div><div class="CodeMirror-gutters" style="display: none; height: 69px;"></div></div></div></pre></li><li><p><strong><span>用途</span></strong><span>：</span></p><ul><li><p><span>设置特定位（如 </span><code>x | 0x01</code><span> 强制最低位置1）。</span></p></li></ul></li></ul><hr /><h3 id='3-按位异或-^'><span>3. </span><strong><span>按位异或 </span><code>^</code></strong></h3><ul><li><p><strong><span>作用</span></strong><span>：对每一位执行异或操作（两位不同时结果为1）。</span></p></li><li><p><strong><span>示例</span></strong><span>：</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="cpp"><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang="cpp"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.52344px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-variable">a</span> <span class="cm-operator">=</span> <span class="cm-number">5</span>; &nbsp; &nbsp;<span class="cm-comment">// 0101</span></span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-variable">b</span> <span class="cm-operator">=</span> <span class="cm-number">3</span>; &nbsp; &nbsp;<span class="cm-comment">// 0011</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-variable">c</span> <span class="cm-operator">=</span> <span class="cm-variable">a</span> <span class="cm-variable">^</span> <span class="cm-variable">b</span>; <span class="cm-comment">// 0110 (十进制6)</span></span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom: 0px solid transparent; top: 69px;"></div><div class="CodeMirror-gutters" style="display: none; height: 69px;"></div></div></div></pre></li><li><p><strong><span>用途</span></strong><span>：</span></p><ul><li><p><span>交换变量值（</span><code>a ^= b; b ^= a; a ^= b;</code><span>）。</span></p></li><li><p><span>简单加密（通过异或密钥）。</span></p></li></ul></li></ul><hr /><h3 id='4-按位取反-~'><span>4. </span><strong><span>按位取反 </span><code>~</code></strong></h3><ul><li><p><strong><span>作用</span></strong><span>：对每一位取反（0变1，1变0）。</span></p></li><li><p><strong><span>示例</span></strong><span>：</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="cpp"><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang="cpp"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.52344px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-variable">a</span> <span class="cm-operator">=</span> <span class="cm-number">5</span>; &nbsp; &nbsp;<span class="cm-comment">// 0101</span></span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-variable">b</span> <span class="cm-operator">=</span> <span class="cm-variable">~a</span>; &nbsp; <span class="cm-comment">// 1010（假设8位，实际为补码表示的负数）</span></span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom: 0px solid transparent; top: 46px;"></div><div class="CodeMirror-gutters" style="display: none; height: 46px;"></div></div></div></pre></li><li><p><strong><span>注意</span></strong><span>：结果与整数表示（补码）相关，通常得到负数。</span></p></li></ul><hr /><h3 id='5-左移-<<'><span>5. </span><strong><span>左移 </span><code>&lt;&lt;</code></strong></h3><ul><li><p><strong><span>作用</span></strong><span>：将二进制位向左移动指定位数，右侧补0。</span></p></li><li><p><strong><span>示例</span></strong><span>：</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="cpp"><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang="cpp"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.52344px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-variable">a</span> <span class="cm-operator">=</span> <span class="cm-number">5</span>; &nbsp; &nbsp;<span class="cm-comment">// 0101</span></span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-variable">b</span> <span class="cm-operator">=</span> <span class="cm-variable">a</span> <span class="cm-operator">&lt;&lt;</span> <span class="cm-number">1</span>; <span class="cm-comment">// 1010 (十进制10)</span></span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom: 0px solid transparent; top: 46px;"></div><div class="CodeMirror-gutters" style="display: none; height: 46px;"></div></div></div></pre></li><li><p><strong><span>用途</span></strong><span>：</span></p><ul><li><p><span>等价于乘以2的幂（</span><code>x &lt;&lt; n</code><span> 等于 </span><code>x * 2^n</code><span>）。</span></p></li><li><p><span>快速构造位掩码。</span></p></li></ul></li></ul><hr /><h3 id='6-右移->>'><span>6. </span><strong><span>右移 </span><code>&gt;&gt;</code></strong></h3><ul><li><p><strong><span>作用</span></strong><span>：将二进制位向右移动指定位数，左侧补符号位（算术右移）或0（逻辑右移，取决于编译器）。</span></p></li><li><p><strong><span>示例</span></strong><span>：</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="cpp"><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang="cpp"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.52344px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-variable">a</span> <span class="cm-operator">=</span> <span class="cm-operator">-</span><span class="cm-number">8</span>; &nbsp; <span class="cm-comment">// 11111000（假设8位）</span></span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-variable">b</span> <span class="cm-operator">=</span> <span class="cm-variable">a</span> <span class="cm-operator">&gt;&gt;</span> <span class="cm-number">1</span>; <span class="cm-comment">// 11111100（算术右移，结果为-4）</span></span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom: 0px solid transparent; top: 46px;"></div><div class="CodeMirror-gutters" style="display: none; height: 46px;"></div></div></div></pre></li><li><p><strong><span>用途</span></strong><span>：</span></p><ul><li><p><span>等价于除以2的幂（向下取整）。</span></p></li><li><p><span>提取特定位（如 </span><code>x &gt;&gt; 4 &amp; 0xFF</code><span> 获取高字节）。</span></p></li></ul></li></ul><hr /><h3 id='关键注意事项'><span>关键注意事项：</span></h3><ol start='' ><li><p><strong><span>操作数类型</span></strong><span>：位运算符通常用于整数类型（</span><code>int</code><span>, </span><code>char</code><span>, </span><code>long</code><span> 等），浮点数需强制转换。</span></p></li><li><p><strong><span>优先级</span></strong><span>：位运算符优先级低于算术运算符（如 </span><code>+</code><span>、</span><code>*</code><span>），建议用括号明确顺序。</span></p></li><li><p><strong><span>符号位</span></strong><span>：右移时负数的行为依赖编译器（算术右移保留符号位）。</span></p></li><li><p><strong><span>溢出</span></strong><span>：左移可能导致未定义行为（如移出数据类型范围）。</span></p></li></ol><hr /><h3 id='示例代码'><span>示例代码</span></h3><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="cpp"><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang="cpp"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.52344px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><span><span>​</span>x</span></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-meta">#include &lt;iostream&gt;</span></span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-keyword">using</span> <span class="cm-keyword">namespace</span> <span class="cm-def">std</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span cm-text="" cm-zwsp="">
+</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-def">main</span>() {</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable-3">int</span> <span class="cm-variable">flags</span> <span class="cm-operator">=</span> <span class="cm-number">0b1010</span>; <span class="cm-comment">// 二进制1010（十进制10）</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">flags</span> <span class="cm-operator">|=</span> <span class="cm-number">0b0001</span>; &nbsp; &nbsp;<span class="cm-comment">// 设置最低位 → 1011 (11)</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">flags</span> <span class="cm-operator">&amp;=</span> <span class="cm-variable">~0b0010</span>; &nbsp; <span class="cm-comment">// 清除第2位 → 1001 (9)</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">flags</span> <span class="cm-variable">^</span><span class="cm-operator">=</span> <span class="cm-number">0b1100</span>; &nbsp; &nbsp;<span class="cm-comment">// 异或 → 0101 (5)</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable-3">int</span> <span class="cm-variable">high_byte</span> <span class="cm-operator">=</span> (<span class="cm-variable">flags</span> <span class="cm-operator">&gt;&gt;</span> <span class="cm-number">4</span>) <span class="cm-operator">&amp;</span> <span class="cm-number">0xFF</span>; <span class="cm-comment">// 右移获取高字节</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">cout</span> <span class="cm-operator">&lt;&lt;</span> <span class="cm-variable">high_byte</span>; &nbsp;<span class="cm-comment">// 输出0（此处flags只有低字节）</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">return</span> <span class="cm-number">0</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">}</span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom: 0px solid transparent; top: 277px;"></div><div class="CodeMirror-gutters" style="display: none; height: 277px;"></div></div></div></pre><p><span>位运算在嵌入式开发、图形处理、网络协议等场景中尤为重要，需谨慎使用以避免逻辑错误。</span></p><h1 id='1ll与011区别'><span>1LL与011区别</span></h1><p><span>在C++中，</span><code>1LL</code><span>和</span><code>011</code><span>有本质区别：</span></p><ol start='' ><li><p><strong><span>1LL</span></strong><span>：</span></p><ul><li><p><span>表示long long类型的整数1</span></p></li><li><p><span>类型：</span><code>long long</code></p></li><li><p><span>值：1 (十进制)</span></p></li><li><p><span>常用于确保大整数运算不溢出</span></p></li></ul></li><li><p><strong><span>011</span></strong><span>：</span></p><ul><li><p><span>表示八进制(octal)整数</span></p></li><li><p><span>类型：</span><code>int</code></p></li><li><p><span>值：9 (十进制)，因为011₈ = 9₁₀</span></p></li><li><p><span>以0开头的整数字面量在C++中表示八进制</span></p></li></ul></li></ol><p><span>我将修改示例文件展示这一区别：</span></p><p><span>编辑</span></p><p>&nbsp;</p><p><span>vector_array_example.cpp</span></p><p><span>+7-4</span></p><p>&nbsp;</p><p><span>思考过程</span></p><p><span>代码修改成功，现在可以清晰展示</span><code>1LL</code><span>和</span><code>011</code><span>的区别。您可以这样测试：</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang=""><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang=""><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.52344px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">bashg++ vector_array_example.cpp -o vector_array_example</span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">echo "0" | ./vector_array_example</span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom: 0px solid transparent; top: 46px;"></div><div class="CodeMirror-gutters" style="display: none; height: 46px;"></div></div></div></pre><p><span>预期输出示例：</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang=""><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang=""><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.52344px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">1LL 类型: x (表示long long，具体符号取决于编译器)</span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">1LL 值: 1</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">011 类型: i (表示int)</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">011 值: 9</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">输出结果:</span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom: 0px solid transparent; top: 115px;"></div><div class="CodeMirror-gutters" style="display: none; height: 115px;"></div></div></div></pre><p><span>关键区别总结：</span></p><ol start='' ><li><p><strong><span>类型不同</span></strong><span>：</span></p><ul><li><p><code>1LL</code><span>是</span><code>long long</code><span>类型(8字节)</span></p></li><li><p><code>011</code><span>是</span><code>int</code><span>类型(通常4字节)</span></p></li></ul></li><li><p><strong><span>进制不同</span></strong><span>：</span></p><ul><li><p><code>1LL</code><span>是十进制</span></p></li><li><p><code>011</code><span>是八进制(前导0)</span></p></li></ul></li><li><p><strong><span>使用场景</span></strong><span>：</span></p><ul><li><p><code>1LL</code><span>用于需要大整数或明确类型的情况</span></p></li><li><p><code>011</code><span>用于八进制表示(现代代码中较少使用)</span></p></li></ul></li></ol><h1 id='0x3f3f3f3f'><span>0x3f3f3f3f</span></h1><p><code>0x3f3f3f3f</code><span>是算法竞赛中常用的一个魔数(magic number)，让我详细解释：</span></p><ol start='' ><li><p><strong><span>数值意义</span></strong><span>：</span></p><ul><li><p><span>十六进制表示，转换为十进制是1061109567</span></p></li><li><p><span>32位系统中，二进制表示为：00111111001111110011111100111111</span></p></li></ul></li><li><p><strong><span>典型用途</span></strong><span>：</span></p><ul><li><p><span>作为&quot;无穷大&quot;的替代值（比INT_MAX小但足够大）</span></p></li><li><p><span>常用于初始化距离数组（如Dijkstra算法）</span></p></li><li><p><span>优点：</span></p><ul><li><p><span>两个0x3f3f3f3f相加不会溢出</span></p></li><li><p><span>满足memset初始化需求（每个字节都是0x3f）</span></p></li></ul></li></ul></li></ol><h1 id='树状数组'><span>树状数组</span></h1><p><a href='https://www.luogu.com.cn/problem/P1908'><span>P1908 逆序对 - 洛谷</span></a></p><p><span>这段代码实现了一个计算数组中</span><strong><span>逆序对</span></strong><span>数量的算法。逆序对是指在数组中，如果前面的元素大于后面的元素，那么这两个元素构成一个逆序对。例如，在数组 </span><code>[3, 1, 2]</code><span> 中，</span><code>(3, 1)</code><span> 和 </span><code>(3, 2)</code><span> 是逆序对，总数为 2。</span></p><h3 id='代码核心思想'><span>代码核心思想</span></h3><ol start='' ><li><p><strong><span>离散化</span></strong><span>：将原始数组中的元素映射到一个连续的区间，减少树状数组的空间占用。</span></p></li><li><p><strong><span>树状数组（Fenwick Tree）</span></strong><span>：用于高效查询和更新前缀和，从而统计逆序对数量。</span></p></li><li><p><strong><span>从后向前遍历</span></strong><span>：通过树状数组动态维护已处理元素的分布，利用前缀和快速计算逆序对。</span></p></li></ol><hr /><h3 id='代码分步解析'><span>代码分步解析</span></h3><h4 id='1-头文件和全局变量'><span>1. 头文件和全局变量</span></h4><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="cpp"><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang="cpp"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.52344px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-meta">#include&lt;bits/stdc++.h&gt;</span></span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-keyword">using</span> <span class="cm-keyword">namespace</span> <span class="cm-def">std</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span cm-text="" cm-zwsp="">
+</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-keyword">typedef</span> <span class="cm-variable-3">long</span> <span class="cm-variable-3">long</span> <span class="cm-variable">ll</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-keyword">const</span> <span class="cm-variable">ll</span> <span class="cm-variable">mod</span> <span class="cm-operator">=</span> <span class="cm-number">1e9</span> <span class="cm-operator">+</span> <span class="cm-number">7</span>; &nbsp;<span class="cm-comment">// 未使用</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-keyword">const</span> <span class="cm-variable">ll</span> <span class="cm-variable">MAXN</span> <span class="cm-operator">=</span> <span class="cm-number">5e5</span> <span class="cm-operator">+</span> <span class="cm-number">5</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span cm-text="" cm-zwsp="">
+</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">ll</span> <span class="cm-variable">a</span>[<span class="cm-variable">MAXN</span>], <span class="cm-variable">b</span>[<span class="cm-variable">MAXN</span>], <span class="cm-variable">c</span>[<span class="cm-variable">MAXN</span>]; &nbsp;<span class="cm-comment">// a:原数组, b:离散化数组, c:树状数组</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">ll</span> <span class="cm-variable">m</span>, <span class="cm-variable">n</span>; &nbsp;<span class="cm-comment">// m:离散化后长度, n:原数组长度</span></span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom: 0px solid transparent; top: 207px;"></div><div class="CodeMirror-gutters" style="display: none; height: 207px;"></div></div></div></pre><ul><li><p><code>a</code><span> 存储输入的原始数组。</span></p></li><li><p><code>b</code><span> 用于排序和离散化。</span></p></li><li><p><code>c</code><span> 是树状数组，用于动态统计前缀和。</span></p></li><li><p><code>m</code><span> 和 </span><code>n</code><span> 分别表示离散化后的数组长度和原数组长度。</span></p></li></ul><hr /><h4 id='2-树状数组核心操作'><span>2. 树状数组核心操作</span></h4><h5 id='1-lowbit-函数'><span>(1) </span><code>lowbit</code><span> 函数</span></h5><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="cpp"><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang="cpp"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.52344px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">ll</span> <span class="cm-def">lowbit</span>(<span class="cm-variable">ll</span> <span class="cm-variable">x</span>) {</span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">return</span> <span class="cm-variable">x</span> <span class="cm-operator">&amp;</span> (<span class="cm-operator">-</span><span class="cm-variable">x</span>); &nbsp;<span class="cm-comment">// 返回x的最低位1所代表的值</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">}</span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom: 0px solid transparent; top: 69px;"></div><div class="CodeMirror-gutters" style="display: none; height: 69px;"></div></div></div></pre><ul><li><p><span>计算 </span><code>x</code><span> 的二进制最低位 1 及其后面的 0 组成的数值（例如，</span><code>x=6 (110)</code><span> 时，</span><code>lowbit(6)=2 (10)</code><span>）。</span></p></li></ul><h5 id='2-add-函数更新操作'><span>(2) </span><code>add</code><span> 函数（更新操作）</span></h5><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="cpp"><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang="cpp"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.52344px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">void</span> <span class="cm-def">add</span>(<span class="cm-variable">ll</span> <span class="cm-variable">x</span>, <span class="cm-variable">ll</span> <span class="cm-variable">y</span>) {</span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">for</span> (<span class="cm-variable">ll</span> <span class="cm-variable">i</span> <span class="cm-operator">=</span> <span class="cm-variable">x</span>; <span class="cm-variable">i</span> <span class="cm-operator">&lt;=</span> <span class="cm-variable">m</span>; <span class="cm-variable">i</span> <span class="cm-operator">+=</span> <span class="cm-variable">lowbit</span>(<span class="cm-variable">i</span>)) </span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp;<span class="cm-variable">c</span>[<span class="cm-variable">i</span>] <span class="cm-operator">+=</span> <span class="cm-variable">y</span>; &nbsp;<span class="cm-comment">// 在位置x增加y（通常y=1）</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">}</span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom: 0px solid transparent; top: 92px;"></div><div class="CodeMirror-gutters" style="display: none; height: 92px;"></div></div></div></pre><ul><li><p><span>从位置 </span><code>x</code><span> 开始，沿着树状数组的结构向上更新所有相关节点的值（每次增加 </span><code>lowbit(i)</code><span>）。</span></p></li></ul><h5 id='3-sum-函数查询前缀和'><span>(3) </span><code>sum</code><span> 函数（查询前缀和）</span></h5><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="cpp"><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang="cpp"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.52344px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">ll</span> <span class="cm-def">sum</span>(<span class="cm-variable">ll</span> <span class="cm-variable">x</span>) {</span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">ll</span> <span class="cm-variable">res</span> <span class="cm-operator">=</span> <span class="cm-number">0</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">for</span> (<span class="cm-variable">ll</span> <span class="cm-variable">i</span> <span class="cm-operator">=</span> <span class="cm-variable">x</span>; <span class="cm-variable">i</span> <span class="cm-operator">&gt;</span> <span class="cm-number">0</span>; <span class="cm-variable">i</span> <span class="cm-operator">-=</span> <span class="cm-variable">lowbit</span>(<span class="cm-variable">i</span>)) </span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp;<span class="cm-variable">res</span> <span class="cm-operator">+=</span> <span class="cm-variable">c</span>[<span class="cm-variable">i</span>]; &nbsp;<span class="cm-comment">// 累加从x到1的所有相关节点的值</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">return</span> <span class="cm-variable">res</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">}</span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom: 0px solid transparent; top: 138px;"></div><div class="CodeMirror-gutters" style="display: none; height: 138px;"></div></div></div></pre><ul><li><p><span>查询前 </span><code>x</code><span> 个元素的和（即 </span><code>b[1..x]</code><span> 的计数）。</span></p></li></ul><hr /><h4 id='3-主处理逻辑-solve'><span>3. 主处理逻辑 </span><code>solve</code></h4><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="cpp" style="break-inside: unset;"><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang="cpp"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.52344px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">void</span> <span class="cm-def">solve</span>() {</span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">cin</span> <span class="cm-operator">&gt;&gt;</span> <span class="cm-variable">n</span>; &nbsp;<span class="cm-comment">// 输入数组长度</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-comment">// 读入数组并复制到b</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">for</span> (<span class="cm-variable">ll</span> <span class="cm-variable">i</span> <span class="cm-operator">=</span> <span class="cm-number">1</span>; <span class="cm-variable">i</span> <span class="cm-operator">&lt;=</span> <span class="cm-variable">n</span>; <span class="cm-variable">i</span><span class="cm-operator">++</span>) </span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp;<span class="cm-variable">cin</span> <span class="cm-operator">&gt;&gt;</span> <span class="cm-variable">a</span>[<span class="cm-variable">i</span>], <span class="cm-variable">b</span>[<span class="cm-variable">i</span>] <span class="cm-operator">=</span> <span class="cm-variable">a</span>[<span class="cm-variable">i</span>];</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-comment">// 排序并离散化</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">sort</span>(<span class="cm-variable">b</span> <span class="cm-operator">+</span> <span class="cm-number">1</span>, <span class="cm-variable">b</span> <span class="cm-operator">+</span> <span class="cm-variable">n</span> <span class="cm-operator">+</span> <span class="cm-number">1</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">m</span> <span class="cm-operator">=</span> <span class="cm-variable">unique</span>(<span class="cm-variable">b</span> <span class="cm-operator">+</span> <span class="cm-number">1</span>, <span class="cm-variable">b</span> <span class="cm-operator">+</span> <span class="cm-variable">n</span> <span class="cm-operator">+</span> <span class="cm-number">1</span>) <span class="cm-operator">-</span> <span class="cm-variable">b</span> <span class="cm-operator">-</span> <span class="cm-number">1</span>; &nbsp;<span class="cm-comment">// 去重后长度</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">ll</span> <span class="cm-variable">ans</span> <span class="cm-operator">=</span> <span class="cm-number">0</span>; &nbsp;<span class="cm-comment">// 逆序对计数器</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-comment">// 从后向前遍历</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">for</span> (<span class="cm-variable">ll</span> <span class="cm-variable">i</span> <span class="cm-operator">=</span> <span class="cm-variable">n</span>; <span class="cm-variable">i</span> <span class="cm-operator">&gt;</span> <span class="cm-number">0</span>; <span class="cm-variable">i</span><span class="cm-operator">--</span>) {</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp;<span class="cm-comment">// 找到a[i]在离散化数组b中的位置</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp;<span class="cm-variable">ll</span> <span class="cm-variable">pos</span> <span class="cm-operator">=</span> <span class="cm-variable">lower_bound</span>(<span class="cm-variable">b</span> <span class="cm-operator">+</span> <span class="cm-number">1</span>, <span class="cm-variable">b</span> <span class="cm-operator">+</span> <span class="cm-variable">m</span> <span class="cm-operator">+</span> <span class="cm-number">1</span>, <span class="cm-variable">a</span>[<span class="cm-variable">i</span>]) <span class="cm-operator">-</span> <span class="cm-variable">b</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp;<span class="cm-comment">// 查询比a[i]小的元素个数（即sum(pos-1)）</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp;<span class="cm-variable">ans</span> <span class="cm-operator">+=</span> <span class="cm-variable">sum</span>(<span class="cm-variable">pos</span> <span class="cm-operator">-</span> <span class="cm-number">1</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp;<span class="cm-comment">// 将当前元素加入树状数组</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp;<span class="cm-variable">add</span>(<span class="cm-variable">pos</span>, <span class="cm-number">1</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp;  }</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">cout</span> <span class="cm-operator">&lt;&lt;</span> <span class="cm-variable">ans</span> <span class="cm-operator">&lt;&lt;</span> <span class="cm-string">"\n"</span>; &nbsp;<span class="cm-comment">// 输出逆序对总数</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">}</span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom: 0px solid transparent; top: 622px;"></div><div class="CodeMirror-gutters" style="display: none; height: 622px;"></div></div></div></pre><ol start='' ><li><p><strong><span>输入处理</span></strong><span>：读取数组 </span><code>a</code><span>，并复制到 </span><code>b</code><span> 用于离散化。</span></p></li><li><p><strong><span>离散化</span></strong><span>：</span></p><ul><li><p><span>对 </span><code>b</code><span> 排序。</span></p></li><li><p><span>使用 </span><code>unique</code><span> 去重，得到 </span><code>m</code><span> 个唯一值。</span></p></li></ul></li><li><p><strong><span>逆序对统计</span></strong><span>：</span></p><ul><li><p><strong><span>从后向前</span></strong><span>遍历 </span><code>a</code><span>：</span></p><ul><li><p><span>用 </span><code>lower_bound</code><span> 找到 </span><code>a[i]</code><span> 在离散化数组 </span><code>b</code><span> 中的位置 </span><code>pos</code><span>。</span></p></li><li><p><span>查询 </span><code>sum(pos-1)</code><span>：统计已处理元素中比 </span><code>a[i]</code><span> 小的数的个数（这些数原本在 </span><code>a[i]</code><span> 后面，现在前面，说明是逆序对）。</span></p></li><li><p><span>将 </span><code>pos</code><span> 位置的值加 1（表示 </span><code>a[i]</code><span> 已处理）。</span></p></li></ul></li></ul></li><li><p><strong><span>输出结果</span></strong><span>：累计的 </span><code>ans</code><span> 即为逆序对总数。</span></p></li></ol><hr /><h4 id='4-主函数'><span>4. 主函数</span></h4><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="cpp"><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang="cpp"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.52344px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-def">main</span>() {</span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">ios::sync_with_stdio</span>(<span class="cm-number">0</span>); &nbsp;<span class="cm-comment">// 关闭同步IO</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">cin</span>.<span class="cm-variable">tie</span>(<span class="cm-number">0</span>), <span class="cm-variable">cout</span>.<span class="cm-variable">tie</span>(<span class="cm-number">0</span>); &nbsp;<span class="cm-comment">// 解绑cin和cout</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">ll</span> <span class="cm-variable">t</span> <span class="cm-operator">=</span> <span class="cm-number">1</span>; &nbsp;<span class="cm-comment">// 测试用例数量</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">while</span> (<span class="cm-variable">t</span><span class="cm-operator">--</span>) </span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp;<span class="cm-variable">solve</span>();</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">return</span> <span class="cm-number">0</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">}</span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom: 0px solid transparent; top: 230px;"></div><div class="CodeMirror-gutters" style="display: none; height: 230px;"></div></div></div></pre><ul><li><p><span>优化输入输出速度（</span><code>ios::sync_with_stdio(0)</code><span> 等）。</span></p></li><li><p><span>处理单组测试用例（</span><code>t=1</code><span>）。</span></p></li></ul><hr /><h3 id='关键点总结'><span>关键点总结</span></h3><ol start='' ><li><p><strong><span>离散化</span></strong><span>：将原始数据映射到连续区间，节省树状数组空间。</span></p><ul><li><p><span>例如，</span><code>a=[3, 1, 2]</code><span> 离散化为 </span><code>b=[1, 2, 3]</code><span>（排序去重后）。</span></p></li></ul></li><li><p><strong><span>树状数组</span></strong><span>：高效维护动态前缀和。</span></p><ul><li><p><code>add(pos, 1)</code><span>：记录元素出现。</span></p></li><li><p><code>sum(pos-1)</code><span>：查询比当前元素小的已处理元素数量。</span></p></li></ul></li><li><p><strong><span>逆序对统计</span></strong><span>：</span></p><ul><li><p><span>从后向前遍历时，每遇到一个元素 </span><code>a[i]</code><span>，查询比它小的已处理元素数量，这些元素原本在 </span><code>a[i]</code><span> 右侧，现在左侧，构成逆序对。</span></p></li></ul></li></ol><hr /><h3 id='示例演示'><span>示例演示</span></h3><p><span>以 </span><code>a=[3, 1, 2]</code><span> 为例：</span></p><ol start='' ><li><p><span>离散化后 </span><code>b=[1, 2, 3]</code><span>（</span><code>m=3</code><span>）。</span></p></li><li><p><span>从后向前处理：</span></p><ul><li><p><code>i=3</code><span>（</span><code>a[3]=2</code><span>）：</span></p><ul><li><p><code>pos=2</code><span>（</span><code>lower_bound</code><span> 找到 2 的位置）。</span></p></li><li><p><code>sum(1)=0</code><span>（比 2 小的数尚未处理）。</span></p></li><li><p><code>add(2, 1)</code><span>：树状数组 </span><code>c[2]=1</code><span>。</span></p></li></ul></li><li><p><code>i=2</code><span>（</span><code>a[2]=1</code><span>）：</span></p><ul><li><p><code>pos=1</code><span>。</span></p></li><li><p><code>sum(0)=0</code><span>。</span></p></li><li><p><code>add(1, 1)</code><span>：</span><code>c[1]=1</code><span>。</span></p></li></ul></li><li><p><code>i=1</code><span>（</span><code>a[1]=3</code><span>）：</span></p><ul><li><p><code>pos=3</code><span>。</span></p></li><li><p><code>sum(2)=c[2]+c[0]=1</code><span>（比 3 小的数有 1 个：</span><code>a[2]=1</code><span> 和 </span><code>a[3]=2</code><span> 中的 </span><code>2</code><span>）。</span></p></li><li><p><code>add(3, 1)</code><span>：</span><code>c[3]=1</code><span>。</span></p></li></ul></li></ul></li><li><p><span>累计 </span><code>ans=0 + 0 + 1 = 1</code><span>？</span><br/><strong><span>注意</span></strong><span>：实际代码中 </span><code>ans</code><span> 会累加 </span><code>sum(pos-1)</code><span> 的每次结果，正确逆序对应为 </span><code>(3,1)</code><span> 和 </span><code>(3,2)</code><span>，总数为 2。</span><br/><strong><span>问题</span></strong><span>：代码逻辑实际统计的是“顺序对”而非逆序对？</span><br/><strong><span>修正</span></strong><span>：代码逻辑是正确的，因为从后向前遍历时，</span><code>sum(pos-1)</code><span> 统计的是</span><strong><span>已处理元素中比当前元素小的</span></strong><span>，即原本在右侧的较小数，构成逆序对。例如：</span></p><ul><li><p><span>处理 </span><code>3</code><span> 时，已处理 </span><code>1</code><span> 和 </span><code>2</code><span>，</span><code>sum(2)</code><span>（比 </span><code>3</code><span> 小的数）是 2，但代码中是 </span><code>sum(pos-1)</code><span> 即 </span><code>sum(2)</code><span>（因为 </span><code>pos=3</code><span> 对应 </span><code>3</code><span> 的位置），实际应为 </span><code>sum(2)</code><span>（比 </span><code>3</code><span> 小的数有 </span><code>1</code><span> 和 </span><code>2</code><span>），但代码中 </span><code>pos</code><span> 是 </span><code>3</code><span>，</span><code>sum(2)</code><span> 是 </span><code>c[2]=1</code><span>（只有 </span><code>2</code><span> 被处理了？）。</span><br/><strong><span>矛盾点</span></strong><span>：离散化后 </span><code>b=[1,2,3]</code><span>，</span><code>a=[3,1,2]</code><span> 的 </span><code>pos</code><span> 依次是 3, 1, 2。  </span></p></li><li><p><code>i=3</code><span>（</span><code>a[3]=2</code><span>）：</span><code>pos=2</code><span>，</span><code>sum(1)=0</code><span>，</span><code>add(2,1)</code><span> → </span><code>c[2]=1</code><span>。  </span></p></li><li><p><code>i=2</code><span>（</span><code>a[2]=1</code><span>）：</span><code>pos=1</code><span>，</span><code>sum(0)=0</code><span>，</span><code>add(1,1)</code><span> → </span><code>c[1]=1</code><span>。  </span></p></li><li><p><code>i=1</code><span>（</span><code>a[1]=3</code><span>）：</span><code>pos=3</code><span>，</span><code>sum(2)=c[2]=1</code><span>（只有 </span><code>2</code><span> 被处理了，但 </span><code>1</code><span> 也在前面？）。</span><br/><strong><span>问题</span></strong><span>：</span><code>sum(2)</code><span> 只统计了 </span><code>c[2]</code><span>，但 </span><code>c[1]</code><span> 也应包含在内？</span><br/><strong><span>原因</span></strong><span>：树状数组的 </span><code>sum</code><span> 是前缀和，</span><code>sum(2)=c[2]+c[0]</code><span>（但 </span><code>c[0]</code><span> 无效），实际树状数组的 </span><code>sum</code><span> 实现是累加所有 </span><code>i</code><span> 从 </span><code>x</code><span> 递减到 </span><code>1</code><span> 的 </span><code>c[i]</code><span>，因此 </span><code>sum(2)=c[2]+c[0]</code><span>（但 </span><code>c[0]</code><span> 未初始化，可能为 0）。</span><br/><strong><span>正确逻辑</span></strong><span>：</span><code>sum(pos-1)</code><span> 统计的是</span><strong><span>已插入的比当前元素小的数</span></strong><span>，即逆序对。</span><br/><strong><span>示例修正</span></strong><span>：  </span></p></li><li><p><span>初始 </span><code>c</code><span> 全 0。  </span></p></li><li><p><code>i=3</code><span>（</span><code>a[3]=2</code><span>）：</span><code>pos=2</code><span>，</span><code>sum(1)=0</code><span>，</span><code>add(2,1)</code><span> → </span><code>c[2]=1</code><span>。  </span></p></li><li><p><code>i=2</code><span>（</span><code>a[2]=1</code><span>）：</span><code>pos=1</code><span>，</span><code>sum(0)=0</code><span>，</span><code>add(1,1)</code><span> → </span><code>c[1]=1</code><span>。  </span></p></li><li><p><code>i=1</code><span>（</span><code>a[1]=3</code><span>）：</span><code>pos=3</code><span>，</span><code>sum(2)=c[2]+c[1]=1+1=2</code><span>（比 </span><code>3</code><span> 小的数有 </span><code>1</code><span> 和 </span><code>2</code><span>）。  </span></p></li><li><p><span>最终 </span><code>ans=2</code><span>（正确）。  </span></p></li></ul><p><strong><span>结论</span></strong><span>：代码逻辑正确，但需注意树状数组的 </span><code>sum</code><span> 实现是累加所有相关节点的值。</span></p></li></ol><hr /><h3 id='复杂度分析'><span>复杂度分析</span></h3><ol start='' ><li><p><strong><span>离散化</span></strong><span>：</span></p><ul><li><p><span>排序：</span><code>O(n log n)</code><span>。</span></p></li><li><p><span>去重：</span><code>O(n)</code><span>。</span></p></li></ul></li><li><p><strong><span>树状数组操作</span></strong><span>：</span></p><ul><li><p><span>每次 </span><code>add</code><span> 和 </span><code>sum</code><span> 是 </span><code>O(log m)</code><span>。</span></p></li><li><p><span>遍历 </span><code>n</code><span> 次，总复杂度 </span><code>O(n log m)</code><span>（</span><code>m ≤ n</code><span>，故为 </span><code>O(n log n)</code><span>）。</span></p></li></ul></li><li><p><strong><span>总复杂度</span></strong><span>：</span><code>O(n log n)</code><span>。</span></p><h1 id='离散化'><span>离散化</span></h1><h3 id='数组离散化详解'><span>数组离散化详解</span></h3><p><strong><span>离散化（Discretization）</span></strong><span> 是将连续或大范围的数值映射到较小的、离散的整数范围内的过程，常用于优化算法效率（如减少空间占用）或适应特定数据结构（如树状数组、线段树）。以下是离散化的核心步骤、代码实现及注意事项：</span></p><hr /><h4 id='1-离散化的核心步骤'><strong><span>1. 离散化的核心步骤</span></strong></h4><ol start='' ><li><p><strong><span>收集所有待离散化的值</span></strong><span>：将原数组中的所有元素（可能包含重复值）存入一个临时数组。</span></p></li><li><p><strong><span>排序并去重</span></strong><span>：对临时数组排序，并去除重复元素，得到有序且唯一的值序列。</span></p></li><li><p><strong><span>建立映射关系</span></strong><span>：为每个唯一值分配一个从0或1开始的连续整数（即离散化后的值）。</span></p></li><li><p><strong><span>替换原数组</span></strong><span>：根据映射关系，将原数组中的每个元素替换为对应的离散化值。</span></p></li></ol><hr /><h4 id='2-代码实现c示例'><strong><span>2. 代码实现（C++示例）</span></strong></h4><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="cpp" style="break-inside: unset;"><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang="cpp"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.52344px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-meta">#include &lt;vector&gt;</span></span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-meta">#include &lt;algorithm&gt;</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-meta">#include &lt;unordered_map&gt;</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span cm-text="" cm-zwsp="">
+</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-keyword">using</span> <span class="cm-keyword">namespace</span> <span class="cm-def">std</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span cm-text="" cm-zwsp="">
+</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">vector</span><span class="cm-operator">&lt;</span><span class="cm-variable-3">int</span><span class="cm-operator">&gt;</span> <span class="cm-def">discretize</span>(<span class="cm-variable">vector</span><span class="cm-operator">&lt;</span><span class="cm-variable-3">int</span><span class="cm-operator">&gt;&amp;</span> <span class="cm-variable">nums</span>) {</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">if</span> (<span class="cm-variable">nums</span>.<span class="cm-variable">empty</span>()) <span class="cm-keyword">return</span> {};</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-comment">// 步骤1：复制并排序去重</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">vector</span><span class="cm-operator">&lt;</span><span class="cm-variable-3">int</span><span class="cm-operator">&gt;</span> <span class="cm-variable">temp</span> <span class="cm-operator">=</span> <span class="cm-variable">nums</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">sort</span>(<span class="cm-variable">temp</span>.<span class="cm-variable">begin</span>(), <span class="cm-variable">temp</span>.<span class="cm-variable">end</span>());</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">temp</span>.<span class="cm-variable">erase</span>(<span class="cm-variable">unique</span>(<span class="cm-variable">temp</span>.<span class="cm-variable">begin</span>(), <span class="cm-variable">temp</span>.<span class="cm-variable">end</span>()), <span class="cm-variable">temp</span>.<span class="cm-variable">end</span>());</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-comment">// 步骤2：建立映射（值 -&gt; 离散化后的索引）</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">unordered_map</span><span class="cm-operator">&lt;</span><span class="cm-variable-3">int</span>, <span class="cm-variable-3">int</span><span class="cm-operator">&gt;</span> <span class="cm-variable">map</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">for</span> (<span class="cm-variable-3">int</span> <span class="cm-variable">i</span> <span class="cm-operator">=</span> <span class="cm-number">0</span>; <span class="cm-variable">i</span> <span class="cm-operator">&lt;</span> <span class="cm-variable">temp</span>.<span class="cm-variable">size</span>(); <span class="cm-operator">++</span><span class="cm-variable">i</span>) {</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp;<span class="cm-variable">map</span>[<span class="cm-variable">temp</span>[<span class="cm-variable">i</span>]] <span class="cm-operator">=</span> <span class="cm-variable">i</span> <span class="cm-operator">+</span> <span class="cm-number">1</span>; <span class="cm-comment">// 通常从1开始（根据需求调整）</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp;  }</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-comment">// 步骤3：替换原数组</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">vector</span><span class="cm-operator">&lt;</span><span class="cm-variable-3">int</span><span class="cm-operator">&gt;</span> <span class="cm-variable">res</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">for</span> (<span class="cm-variable-3">int</span> <span class="cm-variable">num</span> : <span class="cm-variable">nums</span>) {</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp;<span class="cm-variable">res</span>.<span class="cm-variable">push_back</span>(<span class="cm-variable">map</span>[<span class="cm-variable">num</span>]);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp;  }</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">return</span> <span class="cm-variable">res</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">}</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span cm-text="" cm-zwsp="">
+</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-comment">// 示例用法</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-def">main</span>() {</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">vector</span><span class="cm-operator">&lt;</span><span class="cm-variable-3">int</span><span class="cm-operator">&gt;</span> <span class="cm-variable">nums</span> <span class="cm-operator">=</span> {<span class="cm-number">100</span>, <span class="cm-number">200</span>, <span class="cm-number">100</span>, <span class="cm-number">50</span>, <span class="cm-number">300</span>};</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">vector</span><span class="cm-operator">&lt;</span><span class="cm-variable-3">int</span><span class="cm-operator">&gt;</span> <span class="cm-variable">discretized</span> <span class="cm-operator">=</span> <span class="cm-variable">discretize</span>(<span class="cm-variable">nums</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-comment">// 输出：假设映射为 {50:1, 100:2, 200:3, 300:4}，则结果为 [2,3,2,1,4]</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">for</span> (<span class="cm-variable-3">int</span> <span class="cm-variable">num</span> : <span class="cm-variable">discretized</span>) <span class="cm-variable">cout</span> <span class="cm-operator">&lt;&lt;</span> <span class="cm-variable">num</span> <span class="cm-operator">&lt;&lt;</span> <span class="cm-string">" "</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">return</span> <span class="cm-number">0</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">}</span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom: 0px solid transparent; top: 853px;"></div><div class="CodeMirror-gutters" style="display: none; height: 853px;"></div></div></div></pre><hr /><h4 id='3-关键注意事项'><strong><span>3. 关键注意事项</span></strong></h4><ul><li><p><strong><span>去重必要性</span></strong><span>：离散化要求映射后的值唯一，因此必须去重。</span></p></li><li><p><strong><span>映射方向</span></strong><span>：</span></p><ul><li><p><strong><span>值到索引</span></strong><span>：如上述代码，将原值映射为排名（适用于树状数组等）。</span></p></li><li><p><strong><span>索引到值</span></strong><span>：有时需要反向映射（如恢复原值），需额外存储排序后的唯一值数组。</span></p></li></ul></li><li><p><strong><span>稳定性</span></strong><span>：离散化不改变元素的相对顺序，仅压缩数值范围。</span></p></li><li><p><strong><span>边界处理</span></strong><span>：</span></p><ul><li><p><span>空数组需直接返回。</span></p></li><li><p><span>若原数组包含负数或零，排序和映射仍有效（离散化后的值从1或0开始均可）。</span></p></li></ul></li></ul><hr /><h4 id='4-应用场景'><strong><span>4. 应用场景</span></strong></h4><ul><li><p><strong><span>树状数组/线段树</span></strong><span>：这些数据结构要求操作的下标为连续整数，离散化可压缩大范围数值。</span></p></li><li><p><strong><span>坐标压缩</span></strong><span>：在二维平面问题中，将坐标映射到紧凑范围以减少内存使用。</span></p></li><li><p><strong><span>优化比较操作</span></strong><span>：将浮点数或大整数离散化为整数，便于哈希或排序。</span></p></li></ul><hr /><h4 id='5-扩展离散化与排序的关系'><strong><span>5. 扩展：离散化与排序的关系</span></strong></h4><ul><li><p><span>离散化通常依赖排序来去重和确定排名，但排序本身不改变数值范围，而离散化会。</span></p></li><li><p><span>若原数组已有序且无重复，可直接建立映射（跳过排序和去重步骤）。</span></p></li></ul><hr /><h4 id='6-反向离散化恢复原值'><strong><span>6. 反向离散化（恢复原值）</span></strong></h4><p><span>若需从离散化后的值恢复原值，可保存排序后的唯一值数组：</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="cpp"><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang="cpp"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.52344px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">vector</span><span class="cm-operator">&lt;</span><span class="cm-variable-3">int</span><span class="cm-operator">&gt;</span> <span class="cm-def">reverseDiscretize</span>(<span class="cm-keyword">const</span> <span class="cm-variable">vector</span><span class="cm-operator">&lt;</span><span class="cm-variable-3">int</span><span class="cm-operator">&gt;&amp;</span> <span class="cm-variable">discretized</span>, <span class="cm-keyword">const</span> <span class="cm-variable">vector</span><span class="cm-operator">&lt;</span><span class="cm-variable-3">int</span><span class="cm-operator">&gt;&amp;</span> <span class="cm-variable">uniqueSorted</span>) {</span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">vector</span><span class="cm-operator">&lt;</span><span class="cm-variable-3">int</span><span class="cm-operator">&gt;</span> <span class="cm-variable">res</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">for</span> (<span class="cm-variable-3">int</span> <span class="cm-variable">d</span> : <span class="cm-variable">discretized</span>) {</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp;<span class="cm-variable">res</span>.<span class="cm-variable">push_back</span>(<span class="cm-variable">uniqueSorted</span>[<span class="cm-variable">d</span> <span class="cm-operator">-</span> <span class="cm-number">1</span>]); <span class="cm-comment">// 假设离散化从1开始</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp;  }</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">return</span> <span class="cm-variable">res</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">}</span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom: 0px solid transparent; top: 161px;"></div><div class="CodeMirror-gutters" style="display: none; height: 161px;"></div></div></div></pre><hr /><p><span>通过离散化，可以高效处理大范围或稀疏数据，是算法优化中的常用技巧。理解其原理后，可根据具体问题调整实现细节（如映射起始值、是否保留原值等）。</span></p></li></ol><h1 id='质数筛'><span>质数筛</span></h1><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="cpp" style="break-inside: unset;"><div class="CodeMirror cm-s-inner cm-s-null-scroll CodeMirror-wrap" lang="cpp"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9.52344px; left: 8px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-meta">#include&lt;bits/stdc++.h&gt;</span></span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-keyword">using</span> <span class="cm-keyword">namespace</span> <span class="cm-def">std</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-def">main</span>(){</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp; <span class="cm-variable">vector</span><span class="cm-operator">&lt;</span><span class="cm-variable-3">int</span><span class="cm-operator">&gt;</span> <span class="cm-variable">v</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp; <span class="cm-variable">v</span>.<span class="cm-variable">push_back</span>(<span class="cm-number">1</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp; <span class="cm-variable-3">int</span> <span class="cm-variable">a</span>[<span class="cm-number">1000</span>];</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp; <span class="cm-variable">memset</span>(<span class="cm-variable">a</span>,<span class="cm-number">1</span>,<span class="cm-keyword">sizeof</span> <span class="cm-variable">a</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp; <span class="cm-keyword">for</span>(<span class="cm-variable-3">int</span> <span class="cm-variable">i</span><span class="cm-operator">=</span><span class="cm-number">2</span>;<span class="cm-variable">i</span><span class="cm-operator">&lt;=</span><span class="cm-number">100</span>;<span class="cm-variable">i</span><span class="cm-operator">++</span>){</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-keyword">if</span>(<span class="cm-variable">a</span>[<span class="cm-variable">i</span>])<span class="cm-variable">v</span>.<span class="cm-variable">push_back</span>(<span class="cm-variable">i</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-keyword">for</span>(<span class="cm-variable-3">int</span> <span class="cm-variable">j</span><span class="cm-operator">=</span><span class="cm-number">2</span><span class="cm-operator">*</span><span class="cm-variable">i</span>;<span class="cm-variable">j</span><span class="cm-operator">&lt;=</span><span class="cm-number">100</span>;<span class="cm-variable">j</span><span class="cm-operator">+=</span><span class="cm-variable">i</span>){</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp; <span class="cm-variable">a</span>[<span class="cm-variable">j</span>]<span class="cm-operator">=</span><span class="cm-number">0</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">}</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">}</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-keyword">for</span>(<span class="cm-keyword">auto</span> <span class="cm-variable">i</span>:<span class="cm-variable">v</span>)<span class="cm-variable">cout</span><span class="cm-operator">&lt;&lt;</span><span class="cm-variable">i</span><span class="cm-operator">&lt;&lt;</span><span class="cm-string">" "</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-keyword">return</span> <span class="cm-number">0</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">}</span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom: 0px solid transparent; top: 369px;"></div><div class="CodeMirror-gutters" style="display: none; height: 369px;"></div></div></div></pre><p>&nbsp;</p></div></div>
+</body>
+</html>

@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sanmua's Blog</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f8f9fa;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        header {
+            background-color: #343a40;
+            color: white;
+            padding: 1rem 2rem;
+            position: relative;
+        }
+        
+        .site-title {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: white;
+            text-decoration: none;
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            left: 2rem;
+        }
+        
+        nav {
+            text-align: right;
+            padding: 1rem 0;
+        }
+        
+        nav a {
+            color: rgba(255, 255, 255, 0.7);
+            text-decoration: none;
+            margin-left: 2rem;
+            transition: color 0.3s ease;
+        }
+        
+        nav a:hover {
+            color: white;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .blog-header {
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .blog-title {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .blog-description {
+            color: #6c757d;
+            font-size: 1.1rem;
+        }
+        
+        .posts {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+        
+        .post-card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            transition: transform 0.3s ease;
+        }
+        
+        .post-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .post-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+        
+        .post-content {
+            padding: 1.5rem;
+        }
+        
+        .post-title {
+            font-size: 1.5rem;
+            margin-bottom: 0.75rem;
+            color: #2d3436;
+        }
+        
+        .post-excerpt {
+            color: #636e72;
+            margin-bottom: 1rem;
+            line-height: 1.7;
+        }
+        
+        .post-meta {
+            color: #b2bec3;
+            font-size: 0.9rem;
+        }
+        
+        footer {
+            background-color: #343a40;
+            color: white;
+            text-align: center;
+            padding: 1.5rem 0;
+            margin-top: 2rem;
+        }
+        
+        @media (max-width: 768px) {
+            .site-title {
+                position: static;
+                transform: none;
+                margin-bottom: 1rem;
+                display: block;
+            }
+            
+            nav {
+                text-align: left;
+            }
+            
+            nav a {
+                margin-left: 0;
+                margin-right: 1.5rem;
+            }
+            
+            .blog-title {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="#" class="site-title">sanmua</a>
+        <nav>
+            <a href="#">首页</a>
+            <a href="#">文章</a>
+            <a href="#">关于</a>
+            <a href="#">联系</a>
+        </nav>
+    </header>
+    
+    <div class="container">
+        <div class="blog-header">
+            <h1 class="blog-title">Sanmua的个人博客</h1>
+            <p class="blog-description">分享我的学习、工作和生活经验</p>
+        </div>
+        
+        <div class="posts">
+            <div class="post-card">
+                <a href="docs/xx.html">
+                <img src="https://picsum.photos/seed/post1/600/400" alt="第一篇博客文章" class="post-image">
+                </a>
+                <div class="post-content">  
+                       <h2 class="post-title">我的第一篇博客文章</h2>     
+                    <p class="post-excerpt">欢迎来到我的个人博客！这是我的第一篇文章，我将在这里记录我的学习和成长历程...</p>
+                    <div class="post-meta">发布于 2025-11-02 · 阅读时间 5 分钟</div>
+                </div>
+            </div>
+            <div class="post-card">
+                <img src="https://picsum.photos/seed/post2/600/400" alt="学习笔记" class="post-image">
+                <div class="post-content">
+                    <h2 class="post-title">学习HTML和CSS的笔记</h2>
+                    <p class="post-excerpt">在学习前端开发的过程中，我整理了一些HTML和CSS的学习笔记，分享给大家...</p>
+                    <div class="post-meta">发布于 2025-11-01 · 阅读时间 8 分钟</div>
+                </div>
+            </div>
+            
+            <div class="post-card">
+                <img src="https://picsum.photos/seed/post3/600/400" alt="编程经验" class="post-image">
+                <div class="post-content">
+                    <h2 class="post-title">我的编程学习之路</h2>
+                    <p class="post-excerpt">从入门到精通，我的编程学习之路充满了挑战和乐趣。在这里分享我的经验和心得...</p>
+                    <div class="post-meta">发布于 2025-10-30 · 阅读时间 10 分钟</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <footer>
+        <p>&copy; 2025 Sanmua's Blog. 保留所有权利。</p>
+    </footer>
+</body>
+</html>

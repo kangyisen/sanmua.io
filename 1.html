@@ -1,11 +1,180 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh">
 <head>
-         <meta charset="UTF-8">
-         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-         <title>Document</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>滚动图片展示</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+
+        .carousel-container {
+            position: relative;
+            width: 80%;
+            max-width: 800px;
+            overflow: hidden;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .carousel {
+            display: flex;
+            transition: transform 0.5s ease-in-out;
+        }
+
+        .carousel img {
+            min-width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .controls-container {
+            margin-top: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .carousel-nav {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 10px;
+        }
+
+        .nav-btn {
+            background-color: rgba(0,0,0,0.5);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin: 0 5px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+
+        .nav-btn:hover {
+            background-color: rgba(0,0,0,0.8);
+        }
+
+        .indicator {
+            display: flex;
+            justify-content: center;
+            margin-top: 10px;
+        }
+
+        .indicator-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: rgba(255,255,255,0.5);
+            margin: 0 5px;
+            cursor: pointer;
+        }
+
+        .indicator-dot.active {
+            background-color: white;
+        }
+    </style>
 </head>
 <body>
-       <h1>1111</h1>  
+    <div class="carousel-container">
+        <div class="carousel">
+            <img src="https://picsum.photos/seed/img1/800/400" alt="图片1">
+            <img src="https://picsum.photos/seed/img2/800/400" alt="图片2">
+            <img src="https://picsum.photos/seed/img3/800/400" alt="图片3">
+            <img src="https://picsum.photos/seed/img4/800/400" alt="图片4">
+            <img src="https://picsum.photos/seed/img5/800/400" alt="图片5">
+        </div>
+    </div>
+    <div class="controls-container">
+        <div class="carousel-nav">
+            <button class="nav-btn" id="prevBtn">‹</button>
+            <button class="nav-btn" id="nextBtn">›</button>
+        </div>
+        <div class="indicator" id="indicator"></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const carousel = document.querySelector('.carousel');
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            const indicator = document.getElementById('indicator');
+            const images = document.querySelectorAll('.carousel img');
+            let currentIndex = 0;
+            let autoSlide;
+
+            // 创建指示器
+            images.forEach((_, index) => {
+                const dot = document.createElement('div');
+                dot.classList.add('indicator-dot');
+                if (index === 0) dot.classList.add('active');
+                dot.addEventListener('click', () => goToSlide(index));
+                indicator.appendChild(dot);
+            });
+
+            function updateCarousel() {
+                carousel.style.transform = `translateX(-${currentIndex * 100}%)`;
+                
+                // 更新指示器
+                document.querySelectorAll('.indicator-dot').forEach((dot, index) => {
+                    dot.classList.toggle('active', index === currentIndex);
+                });
+            }
+
+            function nextSlide() {
+                currentIndex = (currentIndex + 1) % images.length;
+                updateCarousel();
+            }
+
+            function prevSlide() {
+                currentIndex = (currentIndex - 1 + images.length) % images.length;
+                updateCarousel();
+            }
+
+            function goToSlide(index) {
+                currentIndex = index;
+                updateCarousel();
+            }
+
+            // 自动播放
+            function startAutoSlide() {
+                autoSlide = setInterval(nextSlide, 3000);
+            }
+
+            // 停止自动播放
+            function stopAutoSlide() {
+                clearInterval(autoSlide);
+            }
+
+            // 事件监听
+            nextBtn.addEventListener('click', () => {
+                stopAutoSlide();
+                nextSlide();
+                startAutoSlide();
+            });
+
+            prevBtn.addEventListener('click', () => {
+                stopAutoSlide();
+                prevSlide();
+                startAutoSlide();
+            });
+
+            // 鼠标悬停暂停自动播放
+            const carouselContainer = document.querySelector('.carousel-container');
+            carouselContainer.addEventListener('mouseenter', stopAutoSlide);
+            carouselContainer.addEventListener('mouseleave', startAutoSlide);
+
+            // 初始化
+            startAutoSlide();
+        });
+    </script>
 </body>
 </html>
