@@ -480,3 +480,133 @@ body.has-nav {
   border: 2px solid var(--bg);
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+
+/* ============================================================
+   11. 个人主页风格（简约个人站）
+   ============================================================ */
+.site-nav__brand .logo-mark {
+  width: 28px; height: 28px; border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent), #7c3aed);
+  color: #fff; display: grid; place-items: center;
+  font-weight: 700; font-size: 0.9rem;
+}
+
+/* 侧边抽屉 */
+.drawer-mask {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+  opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 1100;
+}
+.drawer-mask.is-open { opacity: 1; pointer-events: auto; }
+.side-drawer {
+  position: fixed; top: 0; left: 0; bottom: 0;
+  width: 280px; max-width: 80vw; background: var(--surface);
+  border-right: 1px solid var(--border);
+  transform: translateX(-100%);
+  transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+  z-index: 1200; padding: 24px; display: flex; flex-direction: column;
+}
+.side-drawer.is-open { transform: translateX(0); }
+.side-drawer__head {
+  display: flex; align-items: center; gap: 12px;
+  padding-bottom: 20px; border-bottom: 1px solid var(--border); margin-bottom: 16px;
+}
+.side-drawer__head .avatar-sm {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  display: grid; place-items: center; color: #fff; font-weight: 700;
+}
+.side-drawer__head .name { font-weight: 700; }
+.side-drawer__head .sub { font-size: 0.8rem; color: var(--text-tertiary); }
+.side-drawer nav { display: flex; flex-direction: column; gap: 4px; }
+.side-drawer nav a {
+  color: var(--text-secondary); padding: 11px 14px; border-radius: 10px;
+  font-size: 0.95rem; font-weight: 500; display: flex; align-items: center; gap: 10px;
+}
+.side-drawer nav a:hover { background: var(--bg-subtle); color: var(--text); }
+.side-drawer nav a.is-active { color: var(--accent); background: var(--accent-soft); }
+.side-drawer .drawer-foot { margin-top: auto; font-size: 0.8rem; color: var(--text-tertiary); }
+
+/* Hero 居中 */
+.hero-home {
+  min-height: calc(100vh - var(--nav-height) - 120px);
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  padding: 64px 20px 40px;
+}
+.hero-slogan {
+  font-size: clamp(1.3rem, 3.5vw, 1.9rem); font-weight: 500;
+  letter-spacing: 0.15em; color: var(--text-secondary); margin-bottom: 36px;
+}
+.avatar-ring { position: relative; width: 150px; height: 150px; margin-bottom: 32px; }
+.avatar-ring::before {
+  content: ''; position: absolute; inset: -18px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(102,126,234,0.35), rgba(118,75,162,0.18) 55%, transparent 72%);
+}
+.avatar-ring .avatar {
+  position: relative; width: 150px; height: 150px; border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: grid; place-items: center; color: #fff;
+  font-size: 3rem; font-weight: 700;
+  box-shadow: 0 10px 40px rgba(102,126,234,0.35);
+  border: 4px solid var(--surface);
+}
+.hero-hello {
+  font-size: clamp(1.6rem, 4vw, 2.2rem); font-weight: 800;
+  letter-spacing: -0.02em; margin: 0 0 14px;
+}
+.hero-hello .name {
+  display: inline-block; padding: 0 12px; border: 2px dashed var(--border-strong);
+  border-radius: 8px; margin-left: 6px;
+}
+.hero-typing {
+  font-size: 1.1rem; color: var(--text-secondary); min-height: 1.6em; margin-bottom: 28px;
+}
+.hero-typing .cursor {
+  display: inline-block; width: 2px; height: 1.1em; background: var(--accent);
+  margin-left: 2px; vertical-align: -0.15em; animation: blink 1s step-end infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+.hero-actions { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+.btn-pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 22px; border-radius: 999px; font-size: 0.95rem; font-weight: 500;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  transition: all 0.2s;
+}
+.btn-pill:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); color: var(--text); }
+.btn-pill.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-pill.primary:hover { background: var(--accent-hover); }
+
+/* 问候卡片 */
+.greet-card {
+  width: 100%; max-width: 720px; margin: 24px auto 0;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 22px 26px; text-align: center;
+  font-size: 1.1rem; color: var(--text); box-shadow: var(--shadow-sm);
+}
+
+/* 推荐文章 bullet 列表卡片 */
+.home-list { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.home-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 24px 28px; box-shadow: var(--shadow-sm);
+}
+.home-card__title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 1rem; font-weight: 700; margin: 0 0 16px; color: var(--text);
+}
+.home-card__title svg { color: var(--accent); flex-shrink: 0; }
+.home-bullets { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.home-bullets li { position: relative; padding-left: 20px; line-height: 1.6; }
+.home-bullets li::before {
+  content: '•'; position: absolute; left: 4px; color: var(--accent); font-weight: 700;
+}
+.home-bullets a { color: var(--accent); }
+.home-bullets a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.home-bullets .new {
+  font-size: 0.72rem; color: #fff; background: var(--accent);
+  padding: 1px 8px; border-radius: 999px; margin-left: 6px; vertical-align: middle;
+}
+
+@media (max-width: 640px) {
+  .hero-home { padding: 40px 16px 24px; }
+}
