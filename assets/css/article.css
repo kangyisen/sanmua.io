@@ -1,0 +1,120 @@
+/* ============================================================
+   文章页覆盖样式 —— 用于 Typora 导出的 HTML 文章
+   作用：覆盖 Typora 默认白底，使其跟随全站主题并居中阅读
+   注意：Typora 内联样式优先级高，必要处用较高特异性。
+   ============================================================ */
+
+/* 覆盖 Typora 根背景与文字 */
+html,
+body {
+  background-color: var(--bg) !important;
+  color: var(--text) !important;
+}
+
+body.typora-export {
+  padding-left: 24px !important;
+  padding-right: 24px !important;
+}
+
+/* 文章正文容器：居中限宽，留白舒适 */
+#write {
+  max-width: var(--maxw-prose) !important;
+  margin: 0 auto !important;
+  padding-top: 48px !important;
+  padding-bottom: 96px !important;
+  font-size: 16.5px !important;
+  line-height: 1.85 !important;
+  color: var(--text) !important;
+}
+
+/* 标题 */
+#write h1, #write h2, #write h3, #write h4, #write h5, #write h6 {
+  color: var(--text) !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.01em;
+  margin-top: 1.8em !important;
+  margin-bottom: 0.6em !important;
+  line-height: 1.35 !important;
+}
+#write h1 { font-size: 1.9em !important; border-bottom: 1px solid var(--border); padding-bottom: 0.4em; }
+#write h2 { font-size: 1.45em !important; }
+#write h3 { font-size: 1.2em !important; }
+
+#write p { color: var(--text) !important; }
+#write strong { color: var(--text) !important; font-weight: 700; }
+
+#write a { color: var(--accent) !important; text-decoration: underline; text-underline-offset: 3px; }
+
+/* 列表 */
+#write ul, #write ol { padding-left: 1.6em !important; }
+#write li { margin: 0.3em 0 !important; }
+
+/* 引用块 */
+#write blockquote {
+  border-left: 3px solid var(--accent) !important;
+  background: var(--accent-soft) !important;
+  color: var(--text-secondary) !important;
+  padding: 12px 18px !important;
+  margin: 1.2em 0 !important;
+  border-radius: 0 8px 8px 0 !important;
+}
+#write blockquote p { color: var(--text-secondary) !important; }
+
+/* 代码 */
+#write code {
+  font-family: var(--font-mono) !important;
+  font-size: 0.88em !important;
+  background: var(--bg-subtle) !important;
+  border: 1px solid var(--border) !important;
+  padding: 0.15em 0.4em !important;
+  border-radius: 5px !important;
+  color: var(--accent) !important;
+}
+#write pre {
+  background: var(--bg-subtle) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 16px 18px !important;
+  overflow-x: auto !important;
+  margin: 1.2em 0 !important;
+}
+#write pre code {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  color: var(--text) !important;
+  font-size: 0.85em !important;
+  line-height: 1.7 !important;
+}
+
+/* 表格 */
+#write table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  margin: 1.2em 0 !important;
+  font-size: 0.95em !important;
+}
+#write th, #write td {
+  border: 1px solid var(--border) !important;
+  padding: 8px 12px !important;
+  color: var(--text) !important;
+}
+#write th { background: var(--bg-subtle) !important; font-weight: 600 !important; }
+#write tr:nth-child(even) td { background: var(--bg-subtle) !important; }
+
+/* 图片 */
+#write img {
+  border-radius: var(--radius-md) !important;
+  margin: 1.2em auto !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+/* 分隔线 */
+#write hr {
+  border: none !important;
+  border-top: 1px solid var(--border) !important;
+  margin: 2.5em 0 !important;
+}
+
+/* 深色下 mermaid / 导出的白色 SVG 背景适配 */
+[data-theme="dark"] #write { filter: none; }

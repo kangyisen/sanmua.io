@@ -1,67 +1,86 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sanmua's Blog</title>
-    <link rel="stylesheet" href="blog.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>sanmua · 个人博客</title>
+  <meta name="description" content="sanmua 的个人博客，记录学习、工作与生活——数据库笔记、编程之路、数学专题与日常杂项。">
+  <meta property="og:title" content="sanmua · 个人博客">
+  <meta property="og:description" content="记录学习、工作与生活。">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='40' fill='%234f46e5'/%3E%3C/svg%3E">
+  <script>
+    (function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+  </script>
+  <link rel="stylesheet" href="/assets/css/main.css">
 </head>
 <body>
-    <header>
-        <a href="#" class="site-title">sanmua</a>
-        <nav>
-            <a href="#">首页</a>
-            <a href="docs/shuxue/shuxue.html">数学专题</a>
-            <a href="docs/keep/qijiang.html">文章</a>
-            <a href="#">关于</a>
-            <a href="qisimiaoxiang/qisimiaoxiang.html">杂项</a>
-        </nav>
-    </header>  
-    <div class="container">
-        <div class="blog-header">
-            <h1 class="blog-title">Sanmua的个人博客</h1>
-            <p class="blog-description">分享我的学习、工作和生活经验 · 记录成长的每一步</p>
-        </div>
-        
-        <div class="posts">
-            <div class="post-card">
-                <a href="docs/xx.html">
-                    <img src="https://picsum.photos/seed/post1/600/400" alt="第一篇博客文章" class="post-image">
-                    <div class="post-content">  
-                        <h2 class="post-title">我的第一篇博客文章</h2>     
-                        <p class="post-excerpt">欢迎来到我的个人博客！这是我的第一篇文章，我将在这里记录我的学习和成长历程...</p>
-                        <span class="read-more">阅读更多</span>
-                    </div>
-                </a>
-            </div>
-            
-            <div class="post-card">
-                <a href="sjk.html">
-                    <img src="https://picsum.photos/seed/post2/600/400" alt="学习笔记" class="post-image">
-                    <div class="post-content">
-                        <h2 class="post-title">学习数据库的笔记</h2>
-                        <p class="post-excerpt">在数据库学习的过程中，我整理了数据库的学习笔记，分享给大家...</p>
-                        <span class="read-more">阅读更多</span>
-                    </div>
-                </a>
-            </div>
-            
-            <div class="post-card">
-                <a href="docs/daer.html">
-                    <img src="https://picsum.photos/seed/post3/600/400" alt="编程经验" class="post-image">
-                    <div class="post-content">
-                        <h2 class="post-title">我的编程学习之路</h2>
-                        <p class="post-excerpt">从入门到精通，我的编程学习之路充满了挑战和乐趣。在这里分享我的经验和心得...</p>
-                        <span class="read-more">阅读更多</span>
-                    </div>
-                </a>
-            </div>
-        </div>
-    </div>
-    
-    <footer>
-        <p>&copy; <span id="current-year">2025</span> Sanmua's Blog · 欢迎见证我的成长</p>
-    </footer>
-    <script src="blog.js"></script>
+  <main class="page">
+    <section class="hero fade-up">
+      <span class="hero__eyebrow">Blog</span>
+      <h1 class="hero__title">你好，我是 sanmua。</h1>
+      <p class="hero__desc">这里记录我的学习、工作与生活——从数据库笔记到编程之路，从数学专题到日常杂项。不追求完备，只留下真实成长的痕迹。</p>
+    </section>
+
+    <section class="fade-up">
+      <div class="section-head">
+        <h2>最新文章</h2>
+        <span class="count">持续更新</span>
+      </div>
+      <div class="post-list">
+        <a class="post-item" href="/docs/xx.html">
+          <div class="post-item__main">
+            <h3 class="post-item__title">我的第一篇博客文章</h3>
+            <p class="post-item__excerpt">欢迎来到我的个人博客，在这里记录学习与成长历程。</p>
+          </div>
+          <div class="post-item__meta">
+            <span class="post-item__tag">随笔</span>
+          </div>
+        </a>
+
+        <a class="post-item" href="/sjk.html">
+          <div class="post-item__main">
+            <h3 class="post-item__title">学习数据库的笔记</h3>
+            <p class="post-item__excerpt">在数据库学习过程中整理的知识体系与实战笔记。</p>
+          </div>
+          <div class="post-item__meta">
+            <span class="post-item__tag">数据库</span>
+          </div>
+        </a>
+
+        <a class="post-item" href="/docs/daer.html">
+          <div class="post-item__main">
+            <h3 class="post-item__title">我的编程学习之路</h3>
+            <p class="post-item__excerpt">从入门到进阶，记录编程学习过程中的方法与心得。</p>
+          </div>
+          <div class="post-item__meta">
+            <span class="post-item__tag">编程</span>
+          </div>
+        </a>
+
+        <a class="post-item" href="/docs/shuxue/shuxue.html">
+          <div class="post-item__main">
+            <h3 class="post-item__title">数学专题</h3>
+            <p class="post-item__excerpt">系统性整理的数学知识与专题笔记。</p>
+          </div>
+          <div class="post-item__meta">
+            <span class="post-item__tag">数学</span>
+          </div>
+        </a>
+
+        <a class="post-item" href="/qisimiaoxiang/qisimiaoxiang.html">
+          <div class="post-item__main">
+            <h3 class="post-item__title">奇思妙想</h3>
+            <p class="post-item__excerpt">一些零散的想法、小实验与生活碎片。</p>
+          </div>
+          <div class="post-item__meta">
+            <span class="post-item__tag">杂项</span>
+          </div>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <script src="/assets/js/main.js"></script>
 </body>
 </html>
