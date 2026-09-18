@@ -610,3 +610,72 @@ body.has-nav {
 @media (max-width: 640px) {
   .hero-home { padding: 40px 16px 24px; }
 }
+
+/* ============================================================
+   12. 高级感升级
+   ============================================================ */
+
+/* 衬线标题 */
+.font-serif, .hero-hello, .hero-slogan, .home-card__title, .prose__title {
+  font-family: "Noto Serif SC", "Songti SC", "SimSun", Georgia, serif;
+}
+
+/* 阅读进度条 */
+.reading-progress {
+  position: fixed; top: 0; left: 0; height: 2.5px; width: 0;
+  background: linear-gradient(90deg, var(--accent), #7c3aed);
+  z-index: 1300; transition: width 0.1s linear;
+}
+
+/* 头像呼吸光晕 */
+.avatar-ring::before {
+  animation: breathe 4s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+
+/* 关于区块 */
+.about {
+  max-width: 720px; margin: 0 auto; padding: 0 20px 64px;
+}
+.about-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 28px 32px;
+  box-shadow: var(--shadow-sm);
+}
+.about-card h2 {
+  font-size: 1.1rem; margin: 0 0 14px; display: flex; align-items: center; gap: 8px;
+}
+.about-card h2 svg { color: var(--accent); }
+.about-card p { color: var(--text-secondary); line-height: 1.8; margin: 0 0 12px; font-size: 0.98rem; }
+.about-card p:last-child { margin-bottom: 0; }
+.about-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.about-tags span {
+  font-size: 0.8rem; padding: 4px 12px; border-radius: 999px;
+  background: var(--bg-subtle); border: 1px solid var(--border); color: var(--text-secondary);
+}
+
+/* admin 页样式 */
+.admin-wrap { max-width: 860px; margin: 0 auto; padding: 48px 24px 96px; }
+.admin-wrap h1 { font-size: 1.6rem; margin: 0 0 8px; }
+.admin-wrap .sub { color: var(--text-tertiary); margin: 0 0 28px; font-size: 0.95rem; }
+.field { margin-bottom: 18px; }
+.field label { display: block; font-size: 0.9rem; font-weight: 600; margin-bottom: 6px; }
+.field input, .field textarea {
+  width: 100%; padding: 10px 14px; border: 1px solid var(--border);
+  border-radius: var(--radius-md); background: var(--surface); color: var(--text);
+  font: inherit; font-size: 0.95rem;
+}
+.field textarea { min-height: 280px; resize: vertical; line-height: 1.7; }
+.field input:focus, .field textarea:focus { outline: none; border-color: var(--accent); }
+.admin-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.preview-box {
+  border: 1px dashed var(--border-strong); border-radius: var(--radius-md);
+  padding: 20px; margin-top: 20px; background: var(--surface);
+}
+.preview-box h3 { margin: 0 0 12px; font-size: 0.9rem; color: var(--text-tertiary); }
+.admin-status { margin-top: 14px; font-size: 0.9rem; }
+.admin-status.ok { color: #16a34a; }
+.admin-status.err { color: #dc2626; }

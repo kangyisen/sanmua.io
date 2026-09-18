@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>写文章 · sanmua</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%234f46e5'/%3E%3Ctext x='50' y='68' font-size='52' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3ES%3C/text%3E%3C/svg%3E">
+  <script>
+    (function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Serif+SC:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <div class="admin-wrap">
+    <h1 class="font-serif">写文章</h1>
+    <p class="sub">发布后自动提交到仓库并部署到首页。仅自己可见（需要 Token）。</p>
+
+    <div class="field">
+      <label>GitHub Token（只存你本机浏览器，可在 <a href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noopener">fine-grained tokens</a> 生成，仅授权本仓库 Contents 读写）</label>
+      <input type="password" id="token" placeholder="ghp_... / github_pat_...">
+    </div>
+
+    <div class="field">
+      <label>标题</label>
+      <input type="text" id="title" placeholder="文章标题">
+    </div>
+
+    <div class="field">
+      <label>标签（逗号分隔，如：编程, 随笔）</label>
+      <input type="text" id="tags" placeholder="编程, 随笔">
+    </div>
+
+    <div class="field">
+      <label>摘要（一句话，显示在首页）</label>
+      <input type="text" id="excerpt" placeholder="一句话简介">
+    </div>
+
+    <div class="field">
+      <label>正文（Markdown）</label>
+      <textarea id="body" placeholder="# 标题&#10;&#10;支持 **粗体**、列表、代码块等 Markdown 语法"></textarea>
+    </div>
+
+    <div class="admin-actions">
+      <button class="btn-pill primary" id="previewBtn">预览</button>
+      <button class="btn-pill primary" id="publishBtn">发布文章</button>
+    </div>
+    <div class="admin-status" id="status"></div>
+
+    <div class="preview-box" id="previewBox" style="display:none;">
+      <h3>预览</h3>
+      <div id="previewContent" class="prose" style="padding:0;"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="/assets/js/main.js"></script>
+  <script>
+  (function () {
+    var REPO = 'kangyisen/sanmua.io';
+    var $ = function (id) { return document.getElementById(id); };
+
+    // 回填 token
+    try { $('token').value = localStorage.getItem('gh_token') || ''; } catch (e) {}
+
+    function setStatus(msg, ok) {
+      var s = $('status');
+      s.textContent = msg;
+      s.className = 'admin-status ' + (ok ? 'ok' : (ok === false ? 'err' : ''));
+    }
+
+    function b64Encode(str) {
+      return btoa(unescape(encodeURIComponent(str)));
+    }
+    function b64Decode(b64) {
+      return decodeURIComponent(escape(atob(b64)));
+    }
+
+    // 生成新文章的完整 HTML（套壳）
+    function buildArticleHtml(title, dateStr, tags, bodyHtml) {
+      var tagStr = tags.length ? '<span>' + tags.join(' / ') + '</span>' : '';
+      return '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n' +
+        '<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n' +
+        '<title>' + title + ' · sanmua</title>\n' +
+        '<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 100 100\'%3E%3Crect width=\'100\' height=\'100\' rx=\'20\' fill=\'%234f46e5\'/%3E%3C/svg%3E">\n' +
+        '<script>(function(){try{var t=localStorage.getItem("theme");if(t!=="light"&&t!=="dark"){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";}document.documentElement.setAttribute("data-theme",t);}catch(e){}})();<\/script>\n' +
+        '<link rel="stylesheet" href="/assets/css/main.css">\n' +
+        '<link rel="stylesheet" href="/assets/css/article.css">\n</head>\n<body>\n' +
+        '<article class="prose">\n<header class="prose__header">\n' +
+        '<a class="prose__back" href="/">&larr; 返回首页</a>\n' +
+        '<h1 class="prose__title">' + title + '</h1>\n' +
+        '<div class="prose__meta"><span>' + dateStr + '</span>' + tagStr + '</div>\n</header>\n' +
+        '<div class="article-body">' + bodyHtml + '</div>\n</article>\n' +
+        '<script src="/assets/js/main.js"><\/script>\n</body>\n</html>';
+    }
+
+    async function api(path, options) {
+      var token = $('token').value.trim();
+      options.headers = Object.assign({
+        'Authorization': 'Bearer ' + token,
+        'Accept': 'application/vnd.github+json'
+      }, options.headers || {});
+      var res = await fetch('https://api.github.com/repos/' + REPO + '/contents/' + path, options);
+      var data = await res.json().catch(function(){ return {}; });
+      if (!res.ok) throw new Error(data.message || ('HTTP ' + res.status));
+      return data;
+    }
+
+    $('previewBtn').onclick = function () {
+      var md = $('body').value;
+      $('previewContent').innerHTML = marked.parse(md);
+      $('previewBox').style.display = 'block';
+    };
+
+    $('publishBtn').onclick = async function () {
+      var token = $('token').value.trim();
+      var title = $('title').value.trim();
+      var tags = $('tags').value.split(',').map(function(s){return s.trim();}).filter(Boolean);
+      var excerpt = $('excerpt').value.trim();
+      var md = $('body').value;
+
+      if (!token) return setStatus('请先填写 GitHub Token', false);
+      if (!title) return setStatus('请填写标题', false);
+      if (!md.trim()) return setStatus('正文不能为空', false);
+
+      try { localStorage.setItem('gh_token', token); } catch (e) {}
+      setStatus('正在发布…');
+
+      var now = new Date();
+      var pad = function(n){ return n < 10 ? '0'+n : ''+n; };
+      var dateStr = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate());
+      var fname = 'posts/' + dateStr + '-'
+        + now.getHours() + pad(now.getMinutes()) + pad(now.getSeconds()) + '.html';
+
+      var bodyHtml = marked.parse(md);
+      var articleHtml = buildArticleHtml(title, dateStr, tags, bodyHtml);
+
+      try {
+        // 1. 创建文章文件
+        setStatus('① 写入文章文件…');
+        await api(fname, {
+          method: 'PUT',
+          body: JSON.stringify({ message: 'new: ' + title, content: b64Encode(articleHtml) })
+        });
+
+        // 2. 更新 posts.json
+        setStatus('② 更新文章列表…');
+        var listFile = await api('data/posts.json', { method: 'GET' });
+        var posts = JSON.parse(b64Decode(listFile.content));
+        posts.push({
+          title: title, href: '/' + fname, date: dateStr,
+          tags: tags, excerpt: excerpt, isNew: true
+        });
+        await api('data/posts.json', {
+          method: 'PUT',
+          body: JSON.stringify({
+            message: 'chore: 更新文章列表',
+            content: b64Encode(JSON.stringify(posts, null, 2)),
+            sha: listFile.sha
+          })
+        });
+
+        setStatus('发布成功！GitHub Pages 约 1 分钟后生效。', true);
+        $('title').value = ''; $('body').value = ''; $('excerpt').value = '';
+        $('previewBox').style.display = 'none';
+      } catch (e) {
+        setStatus('发布失败：' + e.message + '（请检查 Token 是否有 Contents 读写权限、网络是否正常）', false);
+      }
+    };
+  })();
+  </script>
+</body>
+</html>

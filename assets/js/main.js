@@ -102,6 +102,11 @@
     top.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>';
     document.body.appendChild(top);
 
+    /* 阅读进度条 */
+    var bar = document.createElement('div');
+    bar.className = 'reading-progress';
+    document.body.appendChild(bar);
+
     /* 抽屉开关 */
     var burger = document.getElementById('navBurger');
     function openDrawer() { drawer.classList.add('is-open'); mask.classList.add('is-open'); }
@@ -117,9 +122,12 @@
       try { localStorage.setItem('theme', next); } catch (e) {}
     });
 
-    /* 回到顶部 */
+    /* 回到顶部 + 进度条 */
     window.addEventListener('scroll', function () {
       top.classList.toggle('is-visible', window.scrollY > 400);
+      var h = document.documentElement;
+      var max = h.scrollHeight - h.clientHeight;
+      bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
     }, { passive: true });
     top.addEventListener('click', function () { window.scrollTo({ top: 0, behavior: 'smooth' }); });
 
@@ -142,6 +150,28 @@
     /* 时段问候 */
     var greet = document.querySelector('[data-greet]');
     if (greet) greet.textContent = greeting();
+
+    /* 首页动态文章列表 */
+    var postBox = document.querySelector('.js-posts');
+    if (postBox) loadPosts(postBox);
+  }
+
+  /* 从 posts.json 渲染首页文章列表 */
+  function loadPosts(box) {
+    fetch('/data/posts.json')
+      .then(function (r) { return r.json(); })
+      .then(function (posts) {
+        posts.sort(function (a, b) { return (b.date || '').localeCompare(a.date || ''); });
+        var html = posts.map(function (p) {
+          var tag = (p.tags && p.tags[0]) ? '<span class="post-item__tag" style="margin-left:8px;">' + p.tags[0] + '</span>' : '';
+          var isNew = p.isNew ? '<span class="new">new</span>' : '';
+          return '<li><a href="' + p.href + '">' + p.title + '</a>' + isNew +
+                 '<div style="font-size:0.82rem;color:var(--text-tertiary);margin-top:2px;">' +
+                 (p.excerpt || '') + tag + '</div></li>';
+        }).join('');
+        box.innerHTML = html || '<li>暂无文章</li>';
+      })
+      .catch(function () { box.innerHTML = '<li style="color:var(--text-tertiary);">文章加载失败</li>'; });
   }
 
   /* ---------- 打字机 ---------- */

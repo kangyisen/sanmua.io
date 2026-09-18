@@ -1,0 +1,38 @@
+[
+  {
+    "title": "学习数据库的笔记",
+    "href": "/sjk.html",
+    "date": "2025-06-01",
+    "tags": ["数据库"],
+    "excerpt": "数据库学习过程中整理的知识体系与实战笔记。",
+    "isNew": true
+  },
+  {
+    "title": "我的编程学习之路",
+    "href": "/docs/daer.html",
+    "date": "2025-05-10",
+    "tags": ["编程"],
+    "excerpt": "从入门到进阶，记录编程学习过程中的方法与心得。"
+  },
+  {
+    "title": "我的第一篇博客文章",
+    "href": "/docs/xx.html",
+    "date": "2025-04-01",
+    "tags": ["随笔"],
+    "excerpt": "欢迎来到我的个人博客，在这里记录学习与成长历程。"
+  },
+  {
+    "title": "数学专题",
+    "href": "/docs/shuxue/shuxue.html",
+    "date": "2025-03-15",
+    "tags": ["数学"],
+    "excerpt": "系统性整理的数学知识与专题笔记。"
+  },
+  {
+    "title": "奇思妙想",
+    "href": "/qisimiaoxiang/qisimiaoxiang.html",
+    "date": "2025-02-20",
+    "tags": ["杂项"],
+    "excerpt": "一些零散的想法、小实验与生活碎片。"
+  }
+]
