@@ -1,210 +1,302 @@
-/* ============================================================
- * Sanmua · 全站公共脚本
- * 职责：注入顶栏/侧边抽屉/页脚、主题切换、当前页高亮、
- *       回到顶部、打字机、时段问候、滚动动效
- * 标记：<body data-shell="none"> 的页面（彩蛋/demo）不注入外壳。
- * ============================================================ */
+/* Shared navigation, theme preferences and searchable journal. */
 (function () {
-  'use strict';
-
-  /* ---------- 主题 ---------- */
-  function applyTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme);
-  }
-  function getInitialTheme() {
-    var saved = null;
-    try { saved = localStorage.getItem('theme'); } catch (e) {}
-    if (saved === 'light' || saved === 'dark') return saved;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  }
-  applyTheme(getInitialTheme());
-
-  /* ---------- 导航配置 ---------- */
-  var NAV_LINKS = [
-    { href: '/', label: '首页', icon: 'M3 12l9-9 9 9M5 10v10h14V10' },
-    { href: '/docs/shuxue/shuxue.html', label: '数学专题', icon: 'M4 19V5m0 14h16M8 9l4 4 4-4' },
-    { href: '/qisimiaoxiang/qisimiaoxiang.html', label: '杂项', icon: 'M12 2v20M2 12h20' },
-    { href: '/friends.html', label: '友链', icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75' }
-  ];
-  var GITHUB_URL = 'https://github.com/kangyisen';
-
-  function currentPath() {
-    var p = window.location.pathname;
-    if (p.endsWith('/')) p += 'index.html';
-    return p;
-  }
-  function isActive(linkHref, path) {
-    if (linkHref === '/') return path === '/index.html' || path === '/';
-    return path.indexOf(linkHref) === 0;
+  "use strict";
+  var root = document.documentElement;
+  var reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  try {
+    var saved = localStorage.getItem("theme");
+    root.dataset.theme =
+      saved === "light" || saved === "dark"
+        ? saved
+        : matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+  } catch (_) {
+    root.dataset.theme = "light";
   }
 
-  var ICON_MOON = '<svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
-  var ICON_SUN = '<svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>';
-  var ICON_BURGER = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
-  var ICON_GITHUB = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55v-2.17c-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.7 5.38-5.27 5.67.41.35.77 1.05.77 2.13v3.16c0 .3.21.66.8.55A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>';
-
-  function buildNav() {
-    if (document.body.getAttribute('data-shell') === 'none') return;
-    var path = currentPath();
-
-    /* 顶栏 */
-    var nav = document.createElement('nav');
-    nav.className = 'site-nav';
+  function buildShell() {
+    if (document.body.dataset.shell === "none") return;
+    var path = location.pathname;
+    var links = [
+      { href: "/", label: "首页" },
+      { href: "/#journal", label: "手记" },
+      { href: "/docs/shuxue/shuxue.html", label: "数学" },
+      { href: "/qisimiaoxiang/qisimiaoxiang.html", label: "灵感" },
+      { href: "/friends.html", label: "友链" },
+    ];
+    var nav = document.createElement("header");
+    nav.className = "site-nav";
     nav.innerHTML =
-      '<div class="site-nav__inner">' +
-      '  <div style="display:flex;align-items:center;gap:14px;">' +
-      '    <button class="nav-burger" id="navBurger" aria-label="菜单" style="display:block;background:none;border:none;color:var(--text);cursor:pointer;padding:6px;">' + ICON_BURGER + '</button>' +
-      '    <a class="site-nav__brand" href="/"><span class="logo-mark">S</span>sanmua</a>' +
-      '  </div>' +
-      '  <div style="display:flex;align-items:center;gap:6px;">' +
-      '    <a class="theme-toggle" href="' + GITHUB_URL + '" target="_blank" rel="noopener" aria-label="GitHub" style="text-decoration:none;">' + ICON_GITHUB + '</a>' +
-      '    <button class="theme-toggle" id="themeToggle" aria-label="切换主题">' + ICON_MOON + ICON_SUN + '</button>' +
-      '  </div>' +
-      '</div>';
+      '<div class="site-nav__inner"><a class="site-nav__brand" href="/" aria-label="sanmua 首页"><span class="logo-mark" aria-hidden="true">s.</span>sanmua<span style="color:var(--text-tertiary)">.</span></a><span class="brand-note">个人手记</span><nav class="site-nav__links" id="siteLinks" aria-label="主导航">' +
+      links
+        .map(function (link) {
+          var active =
+            link.href === "/"
+              ? path === "/" || path === "/index.html"
+              : link.href === path;
+          return (
+            '<a href="' +
+            link.href +
+            '"' +
+            (active ? ' class="is-active" aria-current="page"' : "") +
+            ">" +
+            link.label +
+            "</a>"
+          );
+        })
+        .join("") +
+      '</nav><div class="nav-actions"><button class="theme-toggle" type="button" id="themeToggle"></button><button class="nav-burger" type="button" aria-label="展开导航" aria-expanded="false" aria-controls="siteLinks">☰</button></div></div>';
     document.body.prepend(nav);
-    document.body.classList.add('has-nav');
-
-    /* 侧边抽屉 + 遮罩 */
-    var drawer = document.createElement('aside');
-    drawer.className = 'side-drawer';
-    drawer.id = 'sideDrawer';
-    drawer.innerHTML =
-      '<div class="side-drawer__head">' +
-      '  <div class="avatar-sm">S</div>' +
-      '  <div><div class="name">sanmua</div><div class="sub">记录学习 · 工作 · 生活</div></div>' +
-      '</div>' +
-      '<nav>' +
-        NAV_LINKS.map(function (l) {
-          var active = isActive(l.href, path);
-          return '<a href="' + l.href + '"' + (active ? ' class="is-active"' : '') + '>' +
-                 '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="' + l.icon + '"/></svg>' +
-                 l.label + '</a>';
-        }).join('') +
-      '</nav>' +
-      '<div class="drawer-foot">© <span id="y"></span> sanmua</div>';
-    document.body.appendChild(drawer);
-
-    var mask = document.createElement('div');
-    mask.className = 'drawer-mask';
-    mask.id = 'drawerMask';
-    document.body.appendChild(mask);
-
-    /* 页脚 */
-    var footer = document.createElement('footer');
-    footer.className = 'site-footer';
-    footer.innerHTML = '<p>© <span id="y"></span> sanmua · 记录学习、工作与生活</p>';
-    document.body.appendChild(footer);
-
-    /* 回到顶部 */
-    var top = document.createElement('button');
-    top.className = 'back-top';
-    top.setAttribute('aria-label', '回到顶部');
-    top.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>';
-    document.body.appendChild(top);
-
-    /* 阅读进度条 */
-    var bar = document.createElement('div');
-    bar.className = 'reading-progress';
-    document.body.appendChild(bar);
-
-    /* 抽屉开关 */
-    var burger = document.getElementById('navBurger');
-    function openDrawer() { drawer.classList.add('is-open'); mask.classList.add('is-open'); }
-    function closeDrawer() { drawer.classList.remove('is-open'); mask.classList.remove('is-open'); }
-    burger.addEventListener('click', openDrawer);
-    mask.addEventListener('click', closeDrawer);
-    drawer.querySelectorAll('nav a').forEach(function (a) { a.addEventListener('click', closeDrawer); });
-
-    /* 主题切换 */
-    document.getElementById('themeToggle').addEventListener('click', function () {
-      var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-      applyTheme(next);
-      try { localStorage.setItem('theme', next); } catch (e) {}
+    document.body.classList.add("has-nav");
+    var themeButton = document.getElementById("themeToggle");
+    function updateThemeLabel() {
+      var dark = root.dataset.theme === "dark";
+      themeButton.textContent = dark ? "☼" : "☾";
+      themeButton.setAttribute(
+        "aria-label",
+        dark ? "切换到浅色主题" : "切换到深色主题",
+      );
+      themeButton.title = themeButton.getAttribute("aria-label");
+    }
+    updateThemeLabel();
+    themeButton.addEventListener("click", function () {
+      root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+      try {
+        localStorage.setItem("theme", root.dataset.theme);
+      } catch (_) {}
+      updateThemeLabel();
     });
-
-    /* 回到顶部 + 进度条 */
-    window.addEventListener('scroll', function () {
-      top.classList.toggle('is-visible', window.scrollY > 400);
-      var h = document.documentElement;
-      var max = h.scrollHeight - h.clientHeight;
-      bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
-    }, { passive: true });
-    top.addEventListener('click', function () { window.scrollTo({ top: 0, behavior: 'smooth' }); });
-
-    /* 年份 */
-    var yr = new Date().getFullYear();
-    document.querySelectorAll('#y').forEach(function (el) { el.textContent = yr; });
-
-    /* 滚动动效 */
-    var io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (en) {
-        if (en.isIntersecting) { en.target.classList.add('is-inview'); io.unobserve(en.target); }
-      });
-    }, { threshold: 0.12 });
-    document.querySelectorAll('.fade-up').forEach(function (el) { io.observe(el); });
-
-    /* 打字机 */
-    var typer = document.querySelector('.hero-typing[data-words]');
-    if (typer) typeWrite(typer, typer.getAttribute('data-words').split('|'));
-
-    /* 时段问候 */
-    var greet = document.querySelector('[data-greet]');
-    if (greet) greet.textContent = greeting();
-
-    /* 首页动态文章列表 */
-    var postBox = document.querySelector('.js-posts');
+    var burger = nav.querySelector(".nav-burger");
+    var menu = document.getElementById("siteLinks");
+    function setMenu(open) {
+      menu.classList.toggle("is-open", open);
+      burger.setAttribute("aria-expanded", String(open));
+      burger.setAttribute("aria-label", open ? "收起导航" : "展开导航");
+      burger.textContent = open ? "×" : "☰";
+    }
+    burger.addEventListener("click", function () {
+      setMenu(burger.getAttribute("aria-expanded") !== "true");
+    });
+    menu.addEventListener("click", function (event) {
+      if (event.target.closest("a")) setMenu(false);
+    });
+    document.addEventListener("keydown", function (event) {
+      if (
+        event.key === "Escape" &&
+        burger.getAttribute("aria-expanded") === "true"
+      ) {
+        setMenu(false);
+        burger.focus();
+      }
+    });
+    document.addEventListener("click", function (event) {
+      if (!nav.contains(event.target)) setMenu(false);
+    });
+    matchMedia("(min-width: 761px)").addEventListener("change", function () {
+      setMenu(false);
+    });
+    var footer = document.createElement("footer");
+    footer.className = "site-footer";
+    footer.innerHTML =
+      "<p>© " +
+      new Date().getFullYear() +
+      ' sanmua · 记录学习与生活</p><p>保持好奇，慢慢生长。 <a href="https://github.com/kangyisen" target="_blank" rel="noopener noreferrer">GitHub ↗</a></p>';
+    document.body.appendChild(footer);
+    var top = document.createElement("button");
+    top.className = "back-top";
+    top.type = "button";
+    top.hidden = true;
+    top.setAttribute("aria-label", "回到顶部");
+    top.textContent = "↑";
+    top.addEventListener("click", function () {
+      window.scrollTo({ top: 0, behavior: reducedMotion ? "auto" : "smooth" });
+    });
+    document.body.appendChild(top);
+    var article =
+      document.getElementById("write") || document.querySelector(".prose");
+    var progress;
+    if (article) {
+      progress = document.createElement("div");
+      progress.className = "reading-progress";
+      progress.setAttribute("aria-hidden", "true");
+      document.body.appendChild(progress);
+      if (article.id === "write") {
+        var back = document.createElement("a");
+        back.className = "article-back";
+        back.href = "/#journal";
+        back.textContent = "← 返回手记";
+        article.before(back);
+      }
+    }
+    function updateScroll() {
+      top.hidden = window.scrollY < 400;
+      if (progress) {
+        var max = root.scrollHeight - root.clientHeight;
+        progress.style.width =
+          (max > 0 ? (root.scrollTop / max) * 100 : 0) + "%";
+      }
+    }
+    window.addEventListener("scroll", updateScroll, { passive: true });
+    updateScroll();
+    var greet = document.querySelector("[data-greet]");
+    if (greet) {
+      var hour = new Date().getHours();
+      greet.textContent =
+        hour < 6
+          ? "夜深了，记得早点休息。"
+          : hour < 12
+            ? "早上好，今天也保持好奇。"
+            : hour < 18
+              ? "下午好，坐下来喝杯茶吧。"
+              : "晚上好，欢迎来这里歇歇脚。";
+    }
+    var postBox = document.querySelector(".js-posts");
     if (postBox) loadPosts(postBox);
   }
 
-  /* 从 posts.json 渲染首页文章列表 */
+  function element(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = text;
+    return node;
+  }
   function loadPosts(box) {
-    fetch('/data/posts.json')
-      .then(function (r) { return r.json(); })
-      .then(function (posts) {
-        posts.sort(function (a, b) { return (b.date || '').localeCompare(a.date || ''); });
-        var html = posts.map(function (p) {
-          var tag = (p.tags && p.tags[0]) ? '<span class="post-item__tag" style="margin-left:8px;">' + p.tags[0] + '</span>' : '';
-          var isNew = p.isNew ? '<span class="new">new</span>' : '';
-          return '<li><a href="' + p.href + '">' + p.title + '</a>' + isNew +
-                 '<div style="font-size:0.82rem;color:var(--text-tertiary);margin-top:2px;">' +
-                 (p.excerpt || '') + tag + '</div></li>';
-        }).join('');
-        box.innerHTML = html || '<li>暂无文章</li>';
-      })
-      .catch(function () { box.innerHTML = '<li style="color:var(--text-tertiary);">文章加载失败</li>'; });
-  }
-
-  /* ---------- 打字机 ---------- */
-  function typeWrite(el, words) {
-    var wi = 0, ci = 0, deleting = false;
-    function tick() {
-      var word = words[wi];
-      el.textContent = word.substring(0, ci);
-      var pause;
-      if (!deleting && ci < word.length) { ci++; pause = 110; }
-      else if (!deleting && ci === word.length) { deleting = true; pause = 1800; }
-      else if (deleting && ci > 0) { ci--; pause = 55; }
-      else { deleting = false; wi = (wi + 1) % words.length; pause = 300; }
-      setTimeout(tick, pause);
+    var posts = [],
+      category = "全部";
+    var search = document.getElementById("postSearch");
+    var count = document.getElementById("postCount");
+    var filters = document.querySelectorAll("[data-filter]");
+    var illustrations = {
+      数据库: ["▤", "DATABASE", ""],
+      编程: ["</>", "CODE NOTES", "code"],
+      数学: ["∑", "MATHEMATICS", ""],
+      随笔: ["✎", "LIFE NOTES", "life"],
+      杂项: ["✳", "IDEAS", "life"],
+    };
+    function render() {
+      var query = search.value.trim().toLocaleLowerCase();
+      var results = posts.filter(function (post) {
+        var tags = post.tags || [];
+        var matchesCategory =
+          category === "全部" ||
+          tags.includes(category) ||
+          (category === "随笔" && tags.includes("杂项"));
+        return (
+          matchesCategory &&
+          [post.title, post.excerpt || "", tags.join(" ")]
+            .join(" ")
+            .toLocaleLowerCase()
+            .includes(query)
+        );
+      });
+      box.replaceChildren();
+      count.textContent = results.length + " / " + posts.length + " 篇手记";
+      results.forEach(function (post, index) {
+        var featured = index === 0 && category === "全部" && !query;
+        var tag = (post.tags || [])[0] || "随笔";
+        var link = element(
+          "a",
+          "post-item" + (featured ? " post-item--featured" : ""),
+        );
+        link.href = post.href;
+        var content = element("div", "post-item__main");
+        var meta = element("div", "post-item__meta");
+        meta.appendChild(element("span", "post-item__tag", tag));
+        var date = element("time", "", (post.date || "").replaceAll("-", "."));
+        date.dateTime = post.date || "";
+        meta.appendChild(date);
+        if (featured) meta.appendChild(element("span", "", "最新手记 ↗"));
+        content.append(
+          meta,
+          element("h3", "", post.title),
+          element("p", "post-item__excerpt", post.excerpt || ""),
+        );
+        var bottom = element("div", "post-item__bottom");
+        bottom.append(
+          element("span", "", "SANMUA / JOURNAL"),
+          element("span", "", "阅读全文 ↗"),
+        );
+        content.appendChild(bottom);
+        var artwork = illustrations[tag] || illustrations["随笔"];
+        var art = element(
+          "div",
+          "post-art post-art--" + artwork[2],
+          artwork[0],
+        );
+        art.setAttribute("aria-hidden", "true");
+        art.appendChild(element("small", "", artwork[1]));
+        link.append(content, art);
+        box.appendChild(link);
+      });
+      if (!results.length) {
+        var empty = element("div", "empty-state");
+        empty.appendChild(
+          element("p", "", "还没有找到这篇手记，换个关键词试试？"),
+        );
+        var reset = element("button", "", "查看全部手记");
+        reset.type = "button";
+        reset.addEventListener("click", function () {
+          search.value = "";
+          setCategory("全部");
+          search.focus();
+        });
+        empty.appendChild(reset);
+        box.appendChild(empty);
+      }
     }
-    tick();
+    function setCategory(value) {
+      category = value;
+      filters.forEach(function (button) {
+        var active = button.dataset.filter === value;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-pressed", String(active));
+      });
+      render();
+    }
+    filters.forEach(function (button) {
+      button.addEventListener("click", function () {
+        setCategory(button.dataset.filter);
+      });
+    });
+    search.addEventListener("input", render);
+    function fetchPosts() {
+      box.replaceChildren(element("p", "", "正在翻开手记…"));
+      fetch("/data/posts.json")
+        .then(function (response) {
+          if (!response.ok) throw new Error("Unable to load posts");
+          return response.json();
+        })
+        .then(function (data) {
+          if (!Array.isArray(data)) throw new Error("Invalid post list");
+          posts = data
+            .filter(function (post) {
+              return (
+                typeof post.title === "string" &&
+                typeof post.href === "string" &&
+                post.href.startsWith("/") &&
+                !post.href.startsWith("//")
+              );
+            })
+            .sort(function (a, b) {
+              return (b.date || "").localeCompare(a.date || "");
+            });
+          render();
+        })
+        .catch(function () {
+          count.textContent = "暂时无法加载";
+          var error = element("div", "empty-state");
+          error.appendChild(element("p", "", "手记暂时没能加载，请稍后再试。"));
+          var retry = element("button", "", "重新加载");
+          retry.type = "button";
+          retry.addEventListener("click", fetchPosts);
+          error.appendChild(retry);
+          box.replaceChildren(error);
+        });
+    }
+    fetchPosts();
   }
-
-  /* ---------- 时段问候 ---------- */
-  function greeting() {
-    var h = new Date().getHours();
-    if (h < 5) return '夜深了，注意休息 🌙';
-    if (h < 9) return '早上好，新的一天 ☀️';
-    if (h < 12) return '上午好，保持专注 💪';
-    if (h < 14) return '中午好，记得吃饭 🍚';
-    if (h < 18) return '下午好，喝杯茶吧 🍵';
-    if (h < 22) return '傍晚好，放松一下 🌆';
-    return '晚上好，今天辛苦了 ✨';
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', buildNav);
-  } else {
-    buildNav();
-  }
+  if (document.readyState === "loading")
+    document.addEventListener("DOMContentLoaded", buildShell);
+  else buildShell();
 })();

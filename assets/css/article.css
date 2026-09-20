@@ -28,7 +28,12 @@ body.typora-export {
 }
 
 /* 标题 */
-#write h1, #write h2, #write h3, #write h4, #write h5, #write h6 {
+#write h1,
+#write h2,
+#write h3,
+#write h4,
+#write h5,
+#write h6 {
   color: var(--text) !important;
   font-weight: 700 !important;
   letter-spacing: -0.01em;
@@ -36,18 +41,40 @@ body.typora-export {
   margin-bottom: 0.6em !important;
   line-height: 1.35 !important;
 }
-#write h1 { font-size: 1.9em !important; border-bottom: 1px solid var(--border); padding-bottom: 0.4em; }
-#write h2 { font-size: 1.45em !important; }
-#write h3 { font-size: 1.2em !important; }
+#write h1 {
+  font-size: 1.9em !important;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.4em;
+}
+#write h2 {
+  font-size: 1.45em !important;
+}
+#write h3 {
+  font-size: 1.2em !important;
+}
 
-#write p { color: var(--text) !important; }
-#write strong { color: var(--text) !important; font-weight: 700; }
+#write p {
+  color: var(--text) !important;
+}
+#write strong {
+  color: var(--text) !important;
+  font-weight: 700;
+}
 
-#write a { color: var(--accent) !important; text-decoration: underline; text-underline-offset: 3px; }
+#write a {
+  color: var(--accent) !important;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 
 /* 列表 */
-#write ul, #write ol { padding-left: 1.6em !important; }
-#write li { margin: 0.3em 0 !important; }
+#write ul,
+#write ol {
+  padding-left: 1.6em !important;
+}
+#write li {
+  margin: 0.3em 0 !important;
+}
 
 /* 引用块 */
 #write blockquote {
@@ -58,7 +85,9 @@ body.typora-export {
   margin: 1.2em 0 !important;
   border-radius: 0 8px 8px 0 !important;
 }
-#write blockquote p { color: var(--text-secondary) !important; }
+#write blockquote p {
+  color: var(--text-secondary) !important;
+}
 
 /* 代码 */
 #write code {
@@ -94,13 +123,19 @@ body.typora-export {
   margin: 1.2em 0 !important;
   font-size: 0.95em !important;
 }
-#write th, #write td {
+#write th,
+#write td {
   border: 1px solid var(--border) !important;
   padding: 8px 12px !important;
   color: var(--text) !important;
 }
-#write th { background: var(--bg-subtle) !important; font-weight: 600 !important; }
-#write tr:nth-child(even) td { background: var(--bg-subtle) !important; }
+#write th {
+  background: var(--bg-subtle) !important;
+  font-weight: 600 !important;
+}
+#write tr:nth-child(even) td {
+  background: var(--bg-subtle) !important;
+}
 
 /* 图片 */
 #write img {
@@ -117,4 +152,59 @@ body.typora-export {
 }
 
 /* 深色下 mermaid / 导出的白色 SVG 背景适配 */
-[data-theme="dark"] #write { filter: none; }
+[data-theme="dark"] #write {
+  filter: none;
+}
+
+/* Align exported documents with the journal shell. */
+body.typora-export {
+  font-family: var(--font-sans) !important;
+}
+#write {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+#write h1:first-child {
+  margin-top: 0 !important;
+  font-family: var(--font-serif);
+  font-weight: 500 !important;
+}
+#write :is(h1, h2, h3, h4, h5, h6) {
+  scroll-margin-top: 110px;
+}
+#write table {
+  display: block;
+  overflow-x: auto;
+}
+#write td,
+#write th {
+  min-width: 100px;
+}
+#write .md-fences {
+  background: var(--bg-subtle) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px !important;
+  overflow-x: auto;
+}
+#write .CodeMirror {
+  background: transparent !important;
+  color: var(--text) !important;
+}
+@media (max-width: 540px) {
+  body.typora-export {
+    padding-left: 22px !important;
+    padding-right: 22px !important;
+  }
+  #write {
+    padding-top: 28px !important;
+    font-size: 16px !important;
+  }
+  .article-back {
+    margin-top: 22px;
+  }
+  .site-nav__inner {
+    line-height: 1.75;
+  }
+}
