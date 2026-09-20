@@ -108,7 +108,10 @@ body.typora-export {
   padding: 20px 22px !important;
   overflow-x: auto !important;
   margin: 1.2em 0 !important;
-  font: 14px/1.7 var(--font-mono) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 16px !important;
+  line-height: 1.65 !important;
+  white-space: pre !important;
   tab-size: 4;
 }
 #write pre code {
@@ -117,6 +120,7 @@ body.typora-export {
   padding: 0 !important;
   color: var(--code-text) !important;
   font: inherit !important;
+  white-space: inherit !important;
 }
 
 :root {
@@ -133,8 +137,8 @@ body.typora-export {
 [data-theme="dark"] {
   --code-bg: #161b22;
   --code-border: #303943;
-  --code-text: #dce3ed;
-  --code-comment: #96a3b3;
+  --code-text: #edf2f7;
+  --code-comment: #b5c1d0;
   --code-keyword: #d2a8ff;
   --code-function: #8bc4ff;
   --code-type: #7ed9c4;
@@ -173,32 +177,32 @@ body.typora-export {
 #write .CodeMirror-activeline-background {
   background: transparent !important;
 }
-#write .CodeMirror .cm-comment,
-#write .CodeMirror .cm-meta {
+#write :is(.CodeMirror, .code-block) .cm-comment,
+#write :is(.CodeMirror, .code-block) .cm-meta {
   color: var(--code-comment) !important;
 }
-#write .CodeMirror .cm-keyword {
+#write :is(.CodeMirror, .code-block) .cm-keyword {
   color: var(--code-keyword) !important;
 }
-#write .CodeMirror .cm-def,
-#write .CodeMirror .cm-builtin {
+#write :is(.CodeMirror, .code-block) .cm-def,
+#write :is(.CodeMirror, .code-block) .cm-builtin {
   color: var(--code-function) !important;
 }
-#write .CodeMirror .cm-variable,
-#write .CodeMirror .cm-operator {
+#write :is(.CodeMirror, .code-block) .cm-variable,
+#write :is(.CodeMirror, .code-block) .cm-operator {
   color: var(--code-text) !important;
 }
-#write .CodeMirror .cm-variable-2,
-#write .CodeMirror .cm-variable-3,
-#write .CodeMirror .cm-type {
+#write :is(.CodeMirror, .code-block) .cm-variable-2,
+#write :is(.CodeMirror, .code-block) .cm-variable-3,
+#write :is(.CodeMirror, .code-block) .cm-type {
   color: var(--code-type) !important;
 }
-#write .CodeMirror .cm-number,
-#write .CodeMirror .cm-atom {
+#write :is(.CodeMirror, .code-block) .cm-number,
+#write :is(.CodeMirror, .code-block) .cm-atom {
   color: var(--code-number) !important;
 }
-#write .CodeMirror .cm-string,
-#write .CodeMirror .cm-string-2 {
+#write :is(.CodeMirror, .code-block) .cm-string,
+#write :is(.CodeMirror, .code-block) .cm-string-2 {
   color: var(--code-string) !important;
 }
 
