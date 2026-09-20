@@ -99,21 +99,107 @@ body.typora-export {
   border-radius: 5px !important;
   color: var(--accent) !important;
 }
-#write pre {
-  background: var(--bg-subtle) !important;
-  border: 1px solid var(--border) !important;
-  border-radius: var(--radius-md) !important;
-  padding: 16px 18px !important;
+/* Typora nests a <pre> for every CodeMirror line inside the outer <pre>. */
+#write pre:not(.CodeMirror pre) {
+  background: var(--code-bg) !important;
+  color: var(--code-text) !important;
+  border: 1px solid var(--code-border) !important;
+  border-radius: 8px !important;
+  padding: 20px 22px !important;
   overflow-x: auto !important;
   margin: 1.2em 0 !important;
+  font: 14px/1.7 var(--font-mono) !important;
+  tab-size: 4;
 }
 #write pre code {
   background: transparent !important;
   border: none !important;
   padding: 0 !important;
-  color: var(--text) !important;
-  font-size: 0.85em !important;
+  color: var(--code-text) !important;
+  font: inherit !important;
+}
+
+:root {
+  --code-bg: #f3f4f6;
+  --code-border: #dfe3e8;
+  --code-text: #283342;
+  --code-comment: #647080;
+  --code-keyword: #8250a0;
+  --code-function: #0550ae;
+  --code-type: #116b65;
+  --code-number: #97501b;
+  --code-string: #286437;
+}
+[data-theme="dark"] {
+  --code-bg: #161b22;
+  --code-border: #303943;
+  --code-text: #dce3ed;
+  --code-comment: #96a3b3;
+  --code-keyword: #d2a8ff;
+  --code-function: #8bc4ff;
+  --code-type: #7ed9c4;
+  --code-number: #ffc089;
+  --code-string: #add99c;
+}
+#write .CodeMirror {
+  background: transparent !important;
+  color: var(--code-text) !important;
+  font: inherit !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+#write .CodeMirror pre {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  font: inherit !important;
+  color: inherit !important;
   line-height: 1.7 !important;
+  min-height: 1.7em;
+  white-space: pre !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+  overflow: visible !important;
+}
+#write .CodeMirror-lines {
+  padding: 0 !important;
+}
+#write .CodeMirror-scroll {
+  overflow: visible !important;
+}
+#write .CodeMirror-activeline-background {
+  background: transparent !important;
+}
+#write .CodeMirror .cm-comment,
+#write .CodeMirror .cm-meta {
+  color: var(--code-comment) !important;
+}
+#write .CodeMirror .cm-keyword {
+  color: var(--code-keyword) !important;
+}
+#write .CodeMirror .cm-def,
+#write .CodeMirror .cm-builtin {
+  color: var(--code-function) !important;
+}
+#write .CodeMirror .cm-variable,
+#write .CodeMirror .cm-operator {
+  color: var(--code-text) !important;
+}
+#write .CodeMirror .cm-variable-2,
+#write .CodeMirror .cm-variable-3,
+#write .CodeMirror .cm-type {
+  color: var(--code-type) !important;
+}
+#write .CodeMirror .cm-number,
+#write .CodeMirror .cm-atom {
+  color: var(--code-number) !important;
+}
+#write .CodeMirror .cm-string,
+#write .CodeMirror .cm-string-2 {
+  color: var(--code-string) !important;
 }
 
 /* 表格 */
@@ -179,18 +265,6 @@ body.typora-export {
 #write td,
 #write th {
   min-width: 100px;
-}
-#write .md-fences {
-  background: var(--bg-subtle) !important;
-  color: var(--text) !important;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 16px !important;
-  overflow-x: auto;
-}
-#write .CodeMirror {
-  background: transparent !important;
-  color: var(--text) !important;
 }
 @media (max-width: 540px) {
   body.typora-export {
