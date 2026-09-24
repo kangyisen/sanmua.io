@@ -18,61 +18,144 @@
       </header>
 
       <div class="article-body">
-        <p>最近在做一个 AI 角色扮演社交平台，基于 gin-vue-admin（GVA）二开。它同时要服务两类用户：手机端 C 端用户，和公司内部的 B 端管理后台。最自然的想法是拆成两个服务，但又不想维护两套代码——最后落在了「<strong>一个仓库、一个二进制镜像、两个入口</strong>」的方案上，记录一下取舍。</p>
+        <p>最近在做一个 AI 角色扮演 / 剧本社交平台，后端基于 gin-vue-admin（GVA）二开。它同时要服务两类用户：手机端的 C 端用户，和公司内部的 B 端管理后台。这两类服务的诉求几乎是反的，最后落在了「<strong>一个仓库、一个镜像、两个入口</strong>」的方案上。这篇把目录、路由、鉴权、响应封装的真实实现完整记录下来。</p>
 
         <h2>为什么要拆</h2>
-        <p>C 端和 B 端的诉求几乎是反的：</p>
         <ul>
-          <li>C 端面向海量移动端用户，接口要轻、鉴权要快、要做 DAU 统计，错误要多语言；</li>
-          <li>B 端是内部管理，要 RBAC（Casbin）、操作日志、复杂的管理列表，用户量小但权限细。</li>
+          <li>C 端面向海量移动端用户：接口要轻、鉴权要快、要统计 DAU、错误要按 <code>Accept-Language</code> 多语言；</li>
+          <li>B 端是内部管理：要 Casbin RBAC、操作日志、复杂管理列表，用户量小但权限细。</li>
         </ul>
-        <p>如果硬塞在一个 Gin 路由组里，中间件会变成「如果是管理接口就怎样，如果是 App 接口就怎样」的层层 if，维护起来很痛苦。拆成两个进程，端口、鉴权、日志、甚至 Swagger 文档都能各管各的。</p>
+        <p>塞在一个路由组里，中间件会变成「如果是管理接口怎样、App 接口又怎样」的层层 if。拆成两个进程，端口、鉴权、日志、Swagger 文档都各管各的。</p>
 
-        <h2>目录怎么组织</h2>
-        <p>关键是把「共享的东西」和「各自的东西」分开：</p>
+        <h2>两个入口：90% 相同，顺序有讲究</h2>
+        <p>C 端入口 <code>cmd/app/main.go</code>（端口 9259），B 端入口 <code>cmd/platform/main.go</code>（端口 9258）。主体流程几乎一样，但有几处真实差异：</p>
+        <pre><code>// cmd/app/main.go
+global.GVA_VP = internal.Viper()
+initialize.OtherInit()
+global.GVA_LOG = internal.Zap()
+zap.ReplaceGlobals(global.GVA_LOG)
+errors.LoadI18n(); event.LoadI18n()
+global.GVA_DB = db.Gorm()
+db.RegisterTables()        // AutoMigrate
+cache.Init()
+app.AppInit()              // C 端业务初始化（注册 cron 等）
+initialize.Timer()
+internal.RunServer(router.Routers())
+
+// cmd/platform/main.go —— 多了 db.DBList() 和 platform.Init()
+global.GVA_DB = db.Gorm()
+db.DBList()                // 多数据源（B 端独有）
+db.RegisterTables()
+app.MgmInit()              // 管理端业务初始化
+cache.Init()
+initialize.Timer()
+platform.Init()            // B 端框架初始化（字典/数据源等）
+internal.RunServer(router.Routers())</code></pre>
+        <p>两边都支持环境变量 <code>SKIP_AUTO_MIGRATE=1</code> 跳过启动迁移，本地能省十几秒。共享的启动引导（Viper 读配置、Zap 建日志、Gin 引擎、最终 ListenAndServe）都收在 <code>cmd/internal/</code>，两个入口只负责「按什么顺序装配」。</p>
+
+        <h2>目录：共享的下沉，专属的分开</h2>
         <pre><code>server/
 ├── cmd/
-│   ├── app/         # C 端入口 main.go + 专属路由
-│   ├── platform/    # B 端入口 main.go + 专属路由
-│   └── internal/     # 共享：Viper 配置、Zap 日志、Gin 引擎启动
+│   ├── app/          # C 端 main.go + 专属路由
+│   ├── platform/     # B 端 main.go + 专属路由（GVA 框架）
+│   └── internal/      # 共享：Viper / Zap / Gin 引擎
 ├── api/v1/
-│   ├── app/         # C 端 handler
-│   ├── platform/    # B 端 handler
-│   └── internal/    # handler 包装器（鉴权模式）
+│   ├── app/          # C 端 handler
+│   ├── platform/     # B 端 handler
+│   └── internal/     # handler 包装器（鉴权模式）
 ├── services/
-│   ├── app/         # C 端业务逻辑
-│   ├── platform/    # B 端业务逻辑
-│   └── common/      # 共享：错误码、HTTP 封装、存储、第三方 SDK
-├── model/           # 共享数据模型
-└── global/          # 共享单例（DB、Redis、Logger…）</code></pre>
+│   ├── app/          # C 端业务逻辑（30+ 业务包）
+│   ├── platform/     # B 端框架功能
+│   └── common/       # 共享：错误码、HTTP 封装、存储、第三方 SDK
+├── model/            # 共享数据模型（business / system / datatype）
+├── global/           # 共享单例
+└── initialize/       # DB / Redis / cache / 定时任务初始化</code></pre>
 
-        <p>两个服务共享 <code>cmd/internal</code>（启动引导）、<code>model/</code>、<code>services/common/</code>、<code>global/</code>，但各有各的 <code>cmd/&lt;name&gt;/main.go</code> 和路由注册：</p>
-        <table>
-          <thead><tr><th>服务</th><th>入口</th><th>端口</th><th>鉴权</th></tr></thead>
-          <tbody>
-            <tr><td>App（C 端）</td><td>cmd/app/main.go</td><td>9259</td><td>自定义 JWT（x-token）</td></tr>
-            <tr><td>Platform（B 端）</td><td>cmd/platform/main.go</td><td>9258</td><td>JWT + Casbin RBAC</td></tr>
-          </tbody>
-        </table>
+        <h2>路由演进：从单一路径到「多产品」分治</h2>
+        <p>这是文档里没怎么提、但实际很关键的一块。随着业务扩张，C 端路由已经不只是 <code>/v1/app/*</code>，而是按产品 / 端拆成了多组：</p>
+        <pre><code>func Routers() *gin.Engine {
+    engine := internal.InitWebEngine()
+    app.InitAppSwagger(engine)
 
-        <h2>最容易踩的坑：两套 handler 风格</h2>
-        <p>GVA 原本是标准 Gin handler——直接写 <code>c.JSON()</code>。但 C 端我们想要统一的 <code>{"code":0,"msg":"success","data":{}}</code> 响应，还要做 panic 恢复和多语言。于是 C 端 handler 改成了「返回 (data, error)，由包装器统一写响应」的模式：</p>
-        <pre><code>// C 端：业务只关心返回什么数据
-type HandlerFunc func(ctx *http.Context) (interface{}, error)
+    app.InitInternalRouter(engine.Group("/v1/internal"))
 
-// 包装器按鉴权模式包一层
-AppAuth(handler)     // 必须登录，记录 DAU，失败 401
-SelectAuth(handler)   // 登录了就拿用户信息，没登录也放行
-NoAuth(handler)      // 完全开放</code></pre>
-        <p>所有包装器内部都做了 panic recovery，把 panic 转成统一错误响应；还检查 <code>ctx.Writer.Written()</code>，给 WebSocket 升级放行。这样业务 handler 里几乎看不到重复的 try-catch 样板。</p>
+    // 核心业务：/v1/:product，第一个产品 code=app，老客户端零感知
+    group := engine.Group("/v1/:product")
+    app.InitBusinessAppRouter(group)
 
-        <h2>一个让我少写一半代码的决定</h2>
-        <p>B 端经常要管理 C 端的数据（比如审核用户、看订单）。一开始我打算在 <code>services/platform/</code> 里再写一套管理逻辑，后来发现完全没必要——<strong>Platform 的 handler 直接 import <code>services/app/</code> 复用 C 端业务</strong>，只在外层加 Casbin 鉴权和操作日志。B 端不再有独立的业务 Service 层，避免了两套逻辑漂移。</p>
+    genesis.InitRouterV2(engine.Group("/v1/genesis"))   // 独立产品 V2 契约
+    og := engine.Group("/v1/odyssey")                   // 第三版移动 API
+    og.Use(app.OdysseyProductContext())
+    app.InitOdysseyRouter(og)
+    app.InitCreatorRouter(engine.Group("/v1/creator"))   // 创作者平台
+    web.InitBusinessWebRouter(engine.Group("/v1/web"))
+    officialwebsite.InitBusinessOfficialWebsiteRouter(
+        engine.Group("/v1/officialWebsite"))
+    return engine
+}</code></pre>
+        <p>用 <code>:product</code> 路径参数而不是写死 <code>app</code>，是为了让同一套 handler 服务多个产品，产品上下文在包装器里校验并注入。</p>
 
-        <h2>部署</h2>
-        <p>最终是同一个 Go 镜像，两条启动命令：<code>./app -c config-app.yaml</code> 和 <code>./platform -c config-platform.yaml</code>，docker-compose 起两个容器，Nginx 按路径反代（<code>/api/</code> 走 C 端，<code>/platform/</code> 走 B 端）。镜像只构建一次，运维也简单。</p>
+        <h2>Handler 包装器：业务只返回 (data, error)</h2>
+        <p>C 端没有用标准 Gin handler（直接写 <code>c.JSON</code>），而是定义了函数式签名，由包装器统一处理鉴权、panic、响应：</p>
+        <pre><code>type HandlerFunc func(ctx *http.Context) (interface{}, error)
 
-        <blockquote><p>这套拆法的核心不是「微服务」，而是「<strong>同一套代码，按入口分治</strong>」。两个进程共享 80% 的模型和公共逻辑，只在入口、鉴权、响应风格上分道扬镳。对中小团队来说，比真拆成两个仓库靠谱得多。</p></blockquote>
+// 5 种鉴权模式
+AppAuth(h)     // 必须登录，记录 DAU，失败 401
+SelectAuth(h)  // 登录了就拿用户信息，没登录也放行
+NoAuth(h)      // 完全开放
+CreatorAuth(h) // 创作者 token，与 C 端 b_user 物理隔离
+InternalAuth(h)// 内部服务 token（X-Internal-Token，恒定时间比较）</code></pre>
+
+        <p>包装器 <code>Wrapper</code> 内部做了三件值得说的事：</p>
+        <p><strong>1. 产品上下文注入。</strong>从 <code>:product</code> 取 code，查 <code>product.GetByCode</code>，查不到直接 404，避免脏数据写进错误产品；非产品路由（creator/web 等）没有该参数则跳过：</p>
+        <pre><code>code := c.Param("product")
+if code == "" {
+    if fixed, ok := c.Get("fixedProductCode"); ok { code, _ = fixed.(string) }
+}
+if code != "" {
+    p, pErr := product.GetByCode(code)
+    if pErr != nil { ctx.NotFound(); return }
+    ctx.SetAppId(p.ID)
+}</code></pre>
+        <p><strong>2. panic recovery + 堆栈。</strong>defer 里 recover，把 panic 转成内部错误，并打印完整调用栈；同时检查 <code>ctx.Writer.Written()</code>，给 WebSocket 升级放行（连接已被接管，不能再写 HTTP 响应）。</p>
+        <p><strong>3. 日志里 token 脱敏。</strong>记录请求时 <code>x-token</code> 会被替换成 <code>&lt;redacted&gt;</code>，防止 token 落进日志文件。</p>
+
+        <h2>自定义 Context 与统一响应</h2>
+        <p><code>http.Context</code> 内嵌 <code>*gin.Context</code>，额外挂了 <code>DB</code>、<code>LOG</code>、用户信息、<code>Language</code>、<code>appId</code>，以及类型化参数方法（<code>SfID()</code> / <code>IntParam()</code>）。HTTP 状态码遵循「<strong>首错优先</strong>」：4xx 之间不互相覆盖，5xx 可以覆盖 4xx。</p>
+        <p>响应统一为 <code>{"code":0,"msg":"success","data":{}}</code>，出错时 <code>ResponseWrapper</code> 按错误类型映射：</p>
+        <pre><code>switch exp := err.(type) {
+case validator.ValidationErrors: // 参数校验错误 → i18n
+    response["code"] = errors2.CommonInvalidParams
+case *errors2.Error, errors2.Error: // 自定义错误 → 错误码 + i18n
+    response["code"] = exp.ErrorCode
+default: // 兜底未知错误
+    response["code"] = errors2.CommonUnknownError
+}
+if ctx.GetBool(NumericCodeContextKey) { // genesis 产品要求数字码
+    response["code"] = numericErrorCode(ctx, err)
+}</code></pre>
+        <p>字符串错误码（如 <code>auth.token.invalid</code>）是主格式；genesis 这类新契约要求标准 HTTP 数字码，通过 context key 切换，两套并存。</p>
+
+        <h2>JWT：用户信息全在 token 里，缓存只管下线</h2>
+        <p>鉴权用 HS256，token 从 <code>x-token</code> header 读（WebSocket 回退到 <code>?x-token=</code>）。一个关键设计是：<strong>用户基本信息（UserId/Level/Email）全部编码进 JWT</strong>，Redis / 本地缓存只用来控制超时和强制下线，不存用户信息：</p>
+        <pre><code>// 生成 token 后，缓存一个标记位 b_token_{userId}
+cache.Set(fmt.Sprintf("b_token_%d", user.UserId), multiLoginFlag, ttl)
+
+// 校验：先验 JWT 签名，再（开启 TokenLimit 时）查缓存
+if config.Business.AppConfig.TokenLimit {
+    if err := checkCache(ctx, ctx.user.Expired); err != nil {
+        return errors2.ErrorAuthTokenInvalid
+    }
+}</code></pre>
+        <p>多点登录（<code>MultiLogin=false</code>）时，缓存值记录登录 IP，换设备登录会刷新标记，旧 token 再请求即失效，实现「踢人」。还有个容错：开启多点登录时若缓存读不到（Redis 抖动 / key 丢失），会用合法 JWT 把缓存自愈重建，而不是误杀在线用户。</p>
+
+        <h2>B 端复用 C 端业务，少写一半代码</h2>
+        <p>B 端经常要管理 C 端数据（审核用户、看订单、发公告）。我们没有在 <code>services/platform/</code> 再写一套，而是 <strong>Platform handler 直接 import <code>services/app/</code> 复用</strong>，外层只加 Casbin 鉴权和操作日志中间件。B 端不存在独立业务 Service 层，避免两套逻辑漂移。框架功能（用户/菜单/字典等）仍走 GVA 的 <code>enter.go</code> struct embedding 管理。</p>
+
+        <h2>部署：单镜像双命令</h2>
+        <p>同一个 Go 镜像 <code>go-admin-server</code>，docker-compose 起两个容器，启动命令分别是 <code>./app -c config-app.yaml</code> 和 <code>./platform -c config-platform.yaml</code>，<code>network_mode: host</code>，健康检查分别探 9259 / 9258，Nginx 按路径反代（<code>/api/</code> → C 端，<code>/platform/</code> → B 端）。镜像只构建一次。</p>
+
+        <blockquote><p>这套拆法的核心不是「微服务」，而是「<strong>同一套代码，按入口分治</strong>」：两个进程共享 80% 的模型与公共逻辑，只在入口、鉴权、响应风格上分道扬镳。对中小团队，比真拆两个仓库靠谱得多。</p></blockquote>
       </div>
     </article>
     <script src="/assets/js/main.js"></script>

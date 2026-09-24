@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Redis 分布式锁在订单、积分、续期里的五个应用场景 · sanmua</title>
+    <title>Redis 分布式锁在订单、积分、续期、背包里的真实用法 · sanmua</title>
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
     <script src="/assets/js/theme.js"></script>
     <link rel="stylesheet" href="/assets/css/main.css" />
@@ -13,49 +13,111 @@
     <article class="prose">
       <header class="prose__header">
         <a class="prose__back" href="/">&larr; 返回首页</a>
-        <h1 class="prose__title">Redis 分布式锁在订单、积分、续期里的五个应用场景</h1>
+        <h1 class="prose__title">Redis 分布式锁在订单、积分、续期、背包里的真实用法</h1>
         <div class="prose__meta"><span>2026-09-25</span><span>Go</span><span>Redis</span></div>
       </header>
 
       <div class="article-body">
-        <p>单机时代，进程内的互斥锁（mutex）就够了。但一旦服务多实例部署，或者同一用户并发点两次按钮，进程内锁就失效了。这个项目里 Redis 分布式锁几乎贯穿所有写操作，整理一下用到的地方和踩坑。</p>
+        <p>单机时代进程内的 mutex 就够了。但服务一旦多实例部署，或者同一用户手快点两次按钮，进程内锁立刻失效。这个项目里 Redis 分布式锁几乎贯穿所有写操作。这篇基于真实代码，讲清楚锁怎么实现、key 怎么设计、什么时候用阻塞锁，以及为什么锁之外还要数据库兜底。</p>
 
-        <h2>五个锁点</h2>
-        <pre><code>订单创建    lock order:{userId}         防同一用户重复下单
-订单处理    lock order_handle:{orderId}  防支付回调并发处理
-积分扣减    lock points_consume:{userId} 防并发扣减超扣
-会员续期    lock membership:{userId}     防并发续期
-背包使用    lock backpack:{itemId}        防重复使用物品</code></pre>
+        <h2>锁的底层实现：SetNX + UUID + Lua 解锁</h2>
+        <p>最朴素的加锁是 <code>SetNX</code>，但有两个经典坑必须处理：锁过期后被别人拿走、以及解锁时误删别人的锁。我们的实现给每把锁生成一个 UUID 作为持有者标识：</p>
+        <pre><code>func (k *RedisCache) Lock(key string, expireTime ...time.Duration) (bool, error) {
+    exp := 120 * time.Second
+    if len(expireTime) > 0 { exp = expireTime[0] }
+    value := uuid.New().String()
+    ok, err := global.GVA_REDIS.SetNX(ctx, key, value, exp).Result()
+    if ok { k.lockValues.Store(key, value) } // 记录本进程持有
+    return ok, err
+}</code></pre>
+        <p>解锁用 Lua 脚本保证「判断 + 删除」原子，<strong>只有 key 的值等于自己的 UUID 才删</strong>，杜绝锁过期后误删新持有者的锁：</p>
+        <pre><code>var unlockLuaScript = redis.NewScript(`
+if redis.call("get", KEYS[1]) == ARGV[1] then
+    return redis.call("del", KEYS[1])
+else
+    return 0
+end
+`)
+func (k *RedisCache) Unlock(key string) error {
+    value, ok := k.lockValues.Load(key)
+    if !ok { return nil } // 没持有记录，安全忽略
+    k.lockValues.Delete(key)
+    return unlockLuaScript.Run(ctx, redis, []string{key}, value).Err()
+}</code></pre>
 
-        <p>可以看到锁的粒度都很细：<strong>锁到具体用户或具体对象</strong>，而不是锁全局。这样不同用户之间完全不竞争，并发才上得去。</p>
+        <h2>阻塞锁 LockAndWait：愿意等的场景</h2>
+        <p><code>Lock</code> 抢不到立刻失败，但续期、扣积分这类场景，用户已经在等结果，直接报「操作太频繁」体验很差。于是有了自旋等待版，每 200ms 重试一次，直到拿到或超时：</p>
+        <pre><code>func (k *RedisCache) LockAndWait(key string, expireTime time.Duration) (bool, error) {
+    wait := 200 * time.Millisecond
+    retryCnt := expireTime / wait
+    for i := 0; i < int(retryCnt); i++ {
+        value := uuid.New().String()
+        ok, _ := redis.SetNX(ctx, key, value, expireTime).Result()
+        if ok { k.lockValues.Store(key, value); return true, nil }
+        time.Sleep(wait)
+    }
+    return false, nil
+}</code></pre>
+        <p>选择原则很简单：<strong>防重复提交（下单）用 Lock，抢不到说明用户重复点了，直接拒绝；串行化业务（续期 / 扣积分 / 用物品）用 LockAndWait，短暂排队后能成功</strong>。</p>
 
-        <h2>锁的参数怎么定</h2>
-        <p>统一用 30 秒超时。这个值的考量：</p>
+        <h2>真实锁点：粒度都锁到「用户 / 对象」</h2>
+        <pre><code>下单        order_create:{userId}              Lock     防重复下单
+处理回调    order:handle:{orderId}             Lock     防回调并发处理
+会员续期    membership:{appId}:{userId}        LockAndWait 防并发续期
+积分扣减    points_consume:{appId}:{userId}    LockAndWait 防并发扣减 / 入账
+使用背包    backpack_use:{userId}:{itemId}     LockAndWait 防重复使用</code></pre>
+        <p>关键是锁的粒度足够细——锁到具体用户或具体对象，而不是锁全局。不同用户之间完全不竞争，并发才上得去。会员和积分锁还带了 <code>appId</code>，因为同一用户在不同产品下的账户是隔离的。</p>
+
+        <h2>超时时间：统一 30 秒</h2>
+        <p>业务锁统一传 30 秒（底层默认是 120 秒）。考量：</p>
         <ul>
-          <li>太短：业务事务还没跑完锁就自动释放了，另一个请求拿到锁，两个事务交错；</li>
-          <li>太长：进程崩溃后，被锁的 key 要等 30 秒才自动解开，用户会卡住。</li>
+          <li>太短：事务还没提交锁就自动释放，另一请求拿到锁，两个事务交错；</li>
+          <li>太长：进程崩溃后，被锁 key 要等 30 秒才自动解开，用户会明显卡住。</li>
         </ul>
-        <p>我们的业务事务都是数据库本地操作，正常几十毫秒，30 秒是「正常情况永远用不到、异常情况也能自己恢复」的折中。</p>
+        <p>业务事务都是数据库本地操作，正常几十毫秒，30 秒是「正常永远用不到、异常也能自愈」的折中。</p>
 
-        <h2>最容易写错的一点：unlock 的时机</h2>
-        <p>锁必须在<strong>事务提交之后</strong>才释放。反直觉的写法是这样：</p>
-        <pre><code>// ❌ 错误：事务还没 commit 就 unlock
-redis.Lock(key)
-tx := db.Begin()
-tx.Create(order)
-tx.Commit()
-redis.Unlock(key)   // commit 在 unlock 前，这个是对的</code></pre>
-        <p>真正的坑在于用 <code>defer redis.Unlock(key)</code>——如果 defer 写在 <code>tx.Commit()</code> 之前，函数 return 时 defer 执行 unlock，但此时事务可能还没提交完，另一个请求拿到锁读不到刚写入的数据。我们的做法是把 defer unlock 放在事务提交之后的位置，保证「锁内事务一定先落库」。</p>
+        <h2>unlock 时机：必须在事务提交之后</h2>
+        <p>锁要覆盖整个事务，且<strong>释放晚于提交</strong>。否则锁先解、事务没落库，另一个请求拿到锁读不到刚写的数据。项目里的写法是先跑完事务，再用 defer 释放，保证「锁内事务一定先落库」：</p>
+        <pre><code>locked, _ := cache.LockAndWait(lockKey, 30*time.Second)
+if !locked { return errors2.ErrorFrequency }
+defer cache.Unlock(lockKey)   // 函数返回（事务已提交）后才执行
+return db().Transaction(func(tx *gorm.DB) error { ... })</code></pre>
 
-        <h2>锁只是第一道防线，不是全部</h2>
-        <p>分布式锁能挡掉绝大多数并发，但网络分区、Redis 故障时锁可能失效。所以关键写操作还是要靠<strong>数据库层面的唯一约束 / 乐观锁 / 状态机</strong>兜底：</p>
+        <h2>Redis 6.0 兼容：被生产环境教出来的细节</h2>
+        <p>线上是 Redis 6.x，几个 7.0 才有的命令会直接报错，代码里用 Lua 或老命令绕过：</p>
         <ul>
-          <li>订单：状态字段做条件更新（<code>WHERE status = 'pending'</code>），已处理的订单重复回调直接忽略；</li>
-          <li>积分：扣减用 <code>WHERE points >= ?</code>，数据库层保证不扣成负数；</li>
-          <li>履约：<code>OrderFulfillment</code> 有唯一约束，重复履约插不进去。</li>
+          <li><code>EXPIRE key NX</code> 需 7.0+，改用 Lua：仅当 key 存在且无 TTL（<code>ttl == -1</code>）时才设过期；</li>
+          <li><code>EXPIRETIME</code> 需 7.0+，改用 <code>PTTL</code> 取剩余毫秒（不存在返回 -2，无 TTL 返回 -1）。</li>
         </ul>
+        <pre><code>var expireNXScript = redis.NewScript(`
+if redis.call("ttl", KEYS[1]) == -1 then
+    return redis.call("expire", KEYS[1], ARGV[1])
+end
+return 0
+`)</code></pre>
 
-        <blockquote><p>经验是：<strong>分布式锁负责「减少冲突」，数据库约束负责「最终正确」</strong>。别把锁当成一致性的唯一保障——锁会超时、会丢，但唯一索引不会骗你。</p></blockquote>
+        <h2>锁只是第一道防线，不是一致性的全部</h2>
+        <p>网络分区、Redis 故障时锁可能失效，所以关键写操作都有数据库层兜底，这是最重要的认知：</p>
+        <table>
+          <thead><tr><th>场景</th><th>锁负责</th><th>数据库兜底</th></tr></thead>
+          <tbody>
+            <tr><td>订单</td><td>减少并发回调</td><td>状态守卫 <code>WHERE pay_status NOT IN 终态</code></td></tr>
+            <tr><td>积分</td><td>串行化扣减</td><td>乐观锁 <code>version</code> + 余额条件 <code>WHERE 余额-冻结 &gt;= ?</code></td></tr>
+            <tr><td>履约</td><td>串行处理</td><td><code>order_id</code> 唯一索引 + 成功状态计数</td></tr>
+          </tbody>
+        </table>
+        <p>以积分扣减为例，它是「<strong>分布式锁 + 乐观锁重试</strong>」双保险：外层锁把同一用户的请求串行，内层事务更新时带 <code>WHERE id=? AND version=?</code>，若这期间版本变了导致影响行数为 0，就重试最多 3 次：</p>
+        <pre><code>for attempt := 0; attempt < 3; attempt++ {
+    err = db().Transaction(func(tx *gorm.DB) error {
+        return deductPointsCore(appId, userId, amount, recordType, tx)
+    })
+    if err == nil { return nil }
+    if errors.Is(err, errPointsConcurrentConflict) { continue } // 版本冲突，重试
+    return err
+}
+return errors2.ErrorSystemBusy</code></pre>
+
+        <blockquote><p>核心经验：<strong>分布式锁负责「减少冲突、提升吞吐」，数据库约束负责「最终正确」</strong>。锁会超时、会丢、会因网络分区失效，但唯一索引和条件更新不会骗你。永远别把锁当成一致性的唯一保障。</p></blockquote>
       </div>
     </article>
     <script src="/assets/js/main.js"></script>

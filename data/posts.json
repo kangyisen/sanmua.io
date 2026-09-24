@@ -1,18 +1,18 @@
 [
   {
-    "title": "三账户积分设计：普通积分、会员积分与加油包",
+    "title": "四账户积分记账：余额、冻结、乐观锁与消费优先级",
     "href": "/posts/2026-09-25-points-system.html",
     "date": "2026-09-25",
     "tags": ["Go", "设计"],
-    "excerpt": "不同生命周期的钱为什么必须分账户，以及消费扣减优先级是怎么定的。",
+    "excerpt": "不同生命周期的钱为什么分账户，冻结占额、全条件 UPDATE 与两阶段扣减怎么保证不超扣。",
     "isNew": true
   },
   {
-    "title": "Redis 分布式锁在订单、积分、续期里的五个场景",
+    "title": "Redis 分布式锁在订单、积分、续期、背包里的真实用法",
     "href": "/posts/2026-09-25-redis-distributed-lock.html",
     "date": "2026-09-25",
     "tags": ["Go", "Redis"],
-    "excerpt": "锁粒度、30 秒超时、unlock 时机，以及为什么数据库约束才是最终防线。",
+    "excerpt": "SetNX+UUID+Lua 解锁、LockAndWait、真实锁点，以及为什么数据库约束才是最终防线。",
     "isNew": true
   },
   {

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>三账户积分设计：普通积分、会员积分与加油包的记账与消费优先级 · sanmua</title>
+    <title>四账户积分记账：余额、冻结、乐观锁与消费优先级 · sanmua</title>
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
     <script src="/assets/js/theme.js"></script>
     <link rel="stylesheet" href="/assets/css/main.css" />
@@ -13,52 +13,113 @@
     <article class="prose">
       <header class="prose__header">
         <a class="prose__back" href="/">&larr; 返回首页</a>
-        <h1 class="prose__title">三账户积分设计：普通积分、会员积分与加油包的记账与消费优先级</h1>
+        <h1 class="prose__title">四账户积分记账：余额、冻结、乐观锁与消费优先级</h1>
         <div class="prose__meta"><span>2026-09-25</span><span>Go</span><span>设计</span></div>
       </header>
 
       <div class="article-body">
-        <p>做内容产品，积分体系是绕不开的。我们的积分不是单一池子，而是拆成了<strong>三个独立账户</strong>，各自有不同的过期规则和来源。一开始图省事想塞在一个字段里，后来发现会出大问题，记录一下设计过程。</p>
+        <p>做内容产品，积分体系绕不开。我们的积分不是单一池子，而是拆成多个独立账户，各自有不同的过期规则；每个账户还配了冻结字段，配合乐观锁和周期限额。这篇基于真实模型和代码，把「为什么这么分、怎么扣、怎么冻结、怎么记流水」完整讲清楚。</p>
 
-        <h2>为什么要拆三个账户</h2>
-        <p>业务上有三种积分，过期规则完全不同：</p>
+        <h2>为什么必须分账户</h2>
+        <p>核心原因是不同积分的<strong>生命周期不一样</strong>。如果合成一个 <code>points</code> 字段，会员到期时到底该清掉多少、哪些是用户花钱买的永久积分，根本算不清。所以分账户、分流水。实际落地是四个账户（比早期文档多了一个「奖励积分」）：</p>
         <table>
-          <thead><tr><th>账户</th><th>DB 字段</th><th>过期规则</th><th>主要来源</th></tr></thead>
+          <thead><tr><th>账户</th><th>字段</th><th>过期规则</th><th>来源</th></tr></thead>
           <tbody>
-            <tr><td>普通积分</td><td>points</td><td>永不过期</td><td>签到、盲盒奖励、管理员赠送</td></tr>
-            <tr><td>会员积分</td><td>member_points</td><td>随会员到期一起过期</td><td>订阅 / 单买会员时充值</td></tr>
-            <tr><td>加油包积分</td><td>boost_points</td><td>永不过期</td><td>单独购买的积分加油包</td></tr>
+            <tr><td>奖励积分</td><td>reward_points</td><td>活动规则</td><td>活动 / 奖励发放</td></tr>
+            <tr><td>会员积分</td><td>member_points</td><td>随会员到期清零</td><td>订阅 / 单买会员时充值</td></tr>
+            <tr><td>加油包积分</td><td>boost_points</td><td>永不过期</td><td>单独购买积分加油包</td></tr>
+            <tr><td>普通积分</td><td>points</td><td>永不过期</td><td>签到、盲盒、管理员赠送</td></tr>
           </tbody>
         </table>
-        <p>如果合成一个 <code>points</code> 字段，就没法区分哪些积分随会员过期、哪些永远有效——会员到期时到底要清掉多少？算不清。所以必须分账户、分流水。</p>
+
+        <h2>UserPoints 表结构</h2>
+        <p>每个用户在每个产品（appId）下有一条积分记录，<code>(user_id, app_id)</code> 联合唯一。除了四个余额，还有四类冻结字段、乐观锁版本号和周期限额三件套：</p>
+        <pre><code>type UserPointsData struct {
+    Points, MemberPoints, BoostPoints, RewardPoints int64 // 四个余额
+    FrozenPoints, FrozenMemberPoints,
+    FrozenBoostPoints, FrozenRewardPoints int64             // 四个冻结额
+    Version    int64              // 乐观锁版本
+    PointsLimit int64             // 周期积分上限（0=不限）
+    PeriodType PointsPeriodType   // 周期：日 / 周 / 月 / 年 / 不限
+    PeriodUsedPoints int64        // 本周期已用
+    FrozenPeriodPoints int64      // 本周期已冻结
+}</code></pre>
+        <p>「可用余额」永远是余额减去冻结，冻结中的积分不能被再次消费：</p>
+        <pre><code>func availablePointBalance(balance, frozen int64) int64 {
+    available := balance - frozen
+    if available < 0 { return 0 }
+    return available
+}</code></pre>
 
         <h2>消费扣减优先级</h2>
-        <p>用户聊天要扣积分时，先扣哪个账户？业务定的优先级是：</p>
-        <pre><code>畅聊卡（有效期内直接跳过，不扣积分）
-  → 会员积分（最贵、会过期，先用掉）
-  → 加油包积分
-  → 普通积分（最便宜、永不过期，留到最后）</code></pre>
-        <p>这个顺序是从「用户价值最大化」倒推的：<strong>快过期、贵的先扣，便宜的、永久的后扣</strong>。不然会员积分留在账户里过期作废，用户会来投诉。</p>
+        <p>聊天扣积分时先扣哪个账户？顺序是 <strong>奖励 → 会员 → 加油包 → 普通</strong>。逻辑是从用户价值倒推：快过期、活动限定、贵的先用掉，永久有效的留到最后，否则会员积分到期作废会引发投诉。畅聊卡是更上层的全局权益，生效时直接跳过、不扣积分。</p>
+        <p>分摊算法很简洁，按优先级逐个账户「能扣多少扣多少」，把剩余量往后传：</p>
+        <pre><code>func allocatePointAccounts(amount, reward, member, boost, normal int64) (int64,int64,int64,int64) {
+    remaining := amount
+    rewardAmount, remaining := allocatePointAccount(remaining, reward)
+    memberAmount, remaining := allocatePointAccount(remaining, member)
+    boostAmount,  remaining := allocatePointAccount(remaining, boost)
+    normalAmount, _ := allocatePointAccount(remaining, normal)
+    return rewardAmount, memberAmount, boostAmount, normalAmount
+}
+func allocatePointAccount(remaining, available int64) (int64, int64) {
+    if remaining <= 0 || available <= 0 { return 0, remaining }
+    if available >= remaining { return remaining, 0 }
+    return available, remaining - available
+}</code></pre>
 
-        <h2>入账和流水统一收口</h2>
-        <p>积分入账散落在很多地方：签到、履约、管理员调整、会员到期转换。如果每个地方都自己写 <code>UPDATE user SET points = points + ?</code>，迟早漏。所以统一收口到一个函数：</p>
-        <pre><code>user.PointsIncome(userId, points, remark, recordType, accountType, tx)</code></pre>
-        <p>它必须在<strong>事务内</strong>调用，同时写账户余额和流水记录。每一笔积分变动都有流水可查，出了问题能对账。</p>
+        <h2>扣减：一条带满条件的 UPDATE + 乐观锁重试</h2>
+        <p>并发扣减最容易扣成负数。我们在同一条 UPDATE 里同时校验版本、各账户冻结后余额和周期限额，任何一条不满足都不会写：</p>
+        <pre><code>result := tx.Model(&UserPoints{}).
+    Where("id = ? AND version = ?", pointInfo.ID, pointInfo.Version).
+    Where("reward_points - frozen_reward_points >= ?", rewardDeduct).
+    Where("member_points - frozen_member_points >= ?", memberDeduct).
+    Where("boost_points - frozen_boost_points >= ?", boostDeduct).
+    Where("points - frozen_points >= ?", normalDeduct).
+    Where("points_limit <= 0 OR period_type = ? OR
+           points_limit - period_used_points - frozen_period_points >= ?", NoLimit, amount).
+    Updates(updateFields) // 内含 version = version + 1
+if result.RowsAffected == 0 { return errPointsConcurrentConflict }</code></pre>
+        <p>影响行数为 0 说明这期间版本被别的事务改过（或余额 / 限额不足），外层捕获冲突后重试，最多 3 次，仍失败返回「系统繁忙」。这就是「分布式锁串行 + 乐观锁兜底」的配合。</p>
+        <p>扣减前还有两道前置判断：总可用不足 → <code>ErrorPointsInsufficient</code>；开启了周期上限且本周期额度耗尽 → <code>ErrorPointsPeriodExhausted</code>。</p>
 
-        <h2>并发扣减怎么不超扣</h2>
-        <p>用户并发发两条消息，可能同时读同一个积分余额，都判断「够」，都扣，结果扣成负数。两个手段：</p>
+        <h2>流水：跨账户一次扣减产生多条</h2>
+        <p>每笔变动都写 <code>PointsRecord</code>，带 <code>BeforePoints / AfterPoints</code>、账户类型、交易方向（收入 / 支出）、关联订单。一次消费若横跨两个账户，就产生两条流水，保证每个账户都能独立对账：</p>
+        <pre><code>record := PointsRecord{
+    AccountType: accountType, Points: points,
+    BeforePoints: beforePoints, AfterPoints: beforePoints - points,
+    TradeType: TradeTypeOut, RecordType: recordType,
+}</code></pre>
+
+        <h2>入账：和扣减用同一把锁</h2>
+        <p>积分入账散落在签到、履约、后台赠送等很多地方，统一收口到 <code>PointsIncome</code>。一个关键点：<strong>入账也加 <code>points_consume:{appId}:{userId}</code> 锁，和扣减是同一把</strong>，保证入账与扣减互斥，不会读到中间态：</p>
+        <pre><code>func PointsIncome(appId, userId SfID, points int, remark string,
+    recordType RecordType, accountType AccountType, orderId SfID, tx *gorm.DB) error {
+    locked, _ := cache.LockAndWait(getPointsLockKey(appId, userId), 30*time.Second)
+    defer cache.Unlock(lockKey)
+    return pointsIncomeInTx(appId, userId, points, remark, recordType, accountType, orderId, tx)
+}</code></pre>
+        <p>核心逻辑按账户类型选字段，<strong>先写流水、再用 <code>gorm.Expr("字段 + ?")</code> 原子加</strong>。同时提供 <code>PointsIncomeInTx</code> 无锁版——当调用方已经持有这把锁（比如履约引擎在订单处理事务内），避免重复加锁、也避免锁重入死锁。</p>
+
+        <h2>冻结机制：先占额度，成功再扣、失败就放</h2>
+        <p>有些场景要「先占住积分、业务成功才真扣」（比如生成内容前先冻结，生成失败要退还）。这就是两阶段冻结，状态为 Frozen → Consumed / Released，默认 30 分钟 TTL：</p>
+        <pre><code>FreezePointsWithRequestID(...) // 冻结：增加 frozen_*，占用可用额度
+ConsumeFrozenPoints(...)        // 确认：冻结转真实扣减
+ReleaseFrozenPoints(...)        // 释放：退回 frozen_*，恢复额度</code></pre>
+        <p>冻结请求支持传 <code>requestID</code> 做幂等：同一 requestID 重复请求，已冻结则报频繁、已消费则直接返回原记录，防止网络重试导致重复冻结。还提供 <code>ConsumeFrozenPointsWithTransaction</code>，把「业务执行 + 确认扣冻结」放进同一个数据库事务，业务失败则整体回滚、冻结不会被误扣。</p>
+
+        <h2>AfterFind：读取时自动维护过期与周期</h2>
+        <p>模型的 <code>AfterFind</code> 钩子在每次读取时做轻量维护，省掉了一批定时任务：</p>
         <ul>
-          <li>分布式锁 <code>points_consume:{userId}</code>，把同一用户的扣减串行化；</li>
-          <li>数据库兜底：扣减 SQL 写成 <code>UPDATE ... SET points = points - ? WHERE points >= ?</code>，影响行数为 0 就是余额不足。</li>
+          <li>各余额 / 冻结若为负，归零兜底；</li>
+          <li>会员积分有余额且已过 <code>member_points_expired_at</code>，直接清零；</li>
+          <li>周期重置：按 PeriodType 判断是否跨日 / 跨周（ISOWeek）/ 跨月 / 跨年，跨了就把 <code>period_used_points</code> 清零并落库。</li>
         </ul>
 
-        <h2>踩过的坑</h2>
-        <ul>
-          <li><strong>会员积分过期不能硬删</strong>：会员到期时不能直接把 member_points 清零，要按业务规则处理（我们早期做过「会员到期转普通积分」，后来产品取消了这个逻辑，但流水里要能查到历史）。</li>
-          <li><strong>金额用整数不用浮点</strong>：积分本质是钱，DB 里用 int64，展示层再格式化，避免浮点误差。</li>
-        </ul>
+        <h2>会员到期：清零，不转普通积分</h2>
+        <p><code>RevokeMembership</code> 在会员到期时把会员积分直接清零，并写一条「会员到期，积分已过期」的支出流水，<strong>不再转入普通积分</strong>（早期做过转换，产品后来取消）。历史在流水里仍可追溯。</p>
 
-        <blockquote><p>这套设计的核心是：<strong>不同生命周期的钱，必须放在不同的账户里</strong>。一个字段存所有积分，短期省事，长期一定在对账和过期规则上爆炸。</p></blockquote>
+        <blockquote><p>这套设计的核心有两条：<strong>不同生命周期的钱必须放进不同账户</strong>，一个字段存所有积分，迟早会在过期规则和对账上爆炸；以及<strong>「冻结占额 + 乐观锁 + 全条件 UPDATE」</strong>共同保证并发下不超扣、不错扣。余额会骗人，带条件的更新和流水不会。</p></blockquote>
       </div>
     </article>
     <script src="/assets/js/main.js"></script>

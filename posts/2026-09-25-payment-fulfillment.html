@@ -18,63 +18,140 @@
       </header>
 
       <div class="article-body">
-        <p>平台同时接了微信支付、支付宝，以及 Apple / Google 的应用内购买和订阅。支付是最不能出错的环节——钱收了但权益没到、回调重复发、并发下单，任何一个出问题都是真金白银。这篇记录订单管线是怎么设计的。</p>
+        <p>平台同时接了微信支付、支付宝，以及 Apple / Google 的应用内购买与订阅。支付是最不能出错的环节：钱收了权益没到、回调重复发、并发下单，任何一个都是真金白银。这篇基于真实代码，把下单、两类回调、订单状态机、两级幂等、策略模式履约完整拆开。</p>
 
         <h2>整条链路</h2>
-        <pre><code>用户下单  →  order_create.go（分布式锁 + 事务）
-    ↓
-支付回调  →  callback/（验签、校金额）
-    ↓        ↓            ↓              ↓
-  微信    支付宝       Apple 订阅       Google 订阅
-  服务端回调 服务端回调   服务端通知       Pub/Sub push
-    ↓
-订单处理  →  order_handle.go（HandleOrderResult，幂等检查）
-    ↓
-自动履约  →  fulfillment/（策略模式，按产品类型分发）</code></pre>
+        <pre><code>用户下单  order_create.go   分布式锁 + 事务写 Order / OrderProduct
+   ↓
+支付回调  callback/         验签、校金额
+   ↓       ↓           ↓             ↓
+ 微信    支付宝      Apple 订阅     Google 订阅
+ 服务端   服务端      服务端通知      Pub/Sub push
+   ↓
+订单处理  order_handle.go   锁 + 终态判断 + 状态守卫
+   ↓
+自动履约  fulfillment/      两级幂等 + 策略模式分发</code></pre>
 
-        <h2>回调分两类，鉴权方式不同</h2>
-        <p>这是最关键的一个区分：</p>
+        <h2>下单：锁内事务，预付放事务外</h2>
+        <p><code>CreateOrder</code> 先用 <code>order_create:{userId}</code> 锁防同一用户重复提交，然后在事务里写订单和订单产品，ID 用 Snowflake 生成：</p>
+        <pre><code>success, err := cache.Lock(fmt.Sprintf("order_create:%d", form.UserId), 30*time.Second)
+if err != nil || !success { return resp, errors2.ErrorFrequency }
+defer cache.Unlock(lockKey)
+
+order.ID = datatype.GenerateID()
+err = db().Transaction(func(tx *gorm.DB) error {
+    if call != nil { if err := call(tx, order, op); err != nil { return err } }
+    if err := tx.Create(order).Error; err != nil { return errors2.ErrorInternal }
+    return tx.Create(op).Error
+})</code></pre>
+        <p>事务支持一个 <code>BizOrderCallback</code> 钩子，让不同业务在下单时夹带额外写入。<strong>调起第三方预付（PrePay）刻意放在事务之外</strong>——第三方接口耗时不可控，放进事务会长时间占着 DB 连接；预付失败则把订单标记为失败，保留记录便于排查。</p>
+
+        <h2>回调分两类，鉴权方式根本不同</h2>
         <ul>
-          <li><strong>服务端回调</strong>（微信、支付宝、Apple/Google 订阅通知）：支付平台直接请求我们的服务器，我们必须<strong>验证签名</strong>，不能信回调里的任何字段；</li>
-          <li><strong>客户端回调</strong>（Apple Pay、Google Pay 一次性购买）：是 App 端发请求告诉我们「我付好了」，这种请求用户可控，所以必须校验 <code>ctx.UserId == order.UserId</code>，防止有人伪造别人的订单号来薅会员。</li>
+          <li><strong>服务端回调</strong>（微信、支付宝、Apple/Google 订阅通知）：支付平台直接请求我们服务器，必须<strong>验证签名并解密</strong>，回调字段一律不可信；</li>
+          <li><strong>客户端回调</strong>（Apple Pay、Google Pay 一次性购买）：App 端发请求，用户可控，必须校验 <code>ctx.UserId == order.UserId</code>，并把支付凭证拿去向苹果 / 谷歌二次验证。</li>
         </ul>
 
-        <h2>幂等：防的是「回调重复」</h2>
-        <p>支付平台的回调机制是「没收到 200 就一直重发」。所以同一个回调可能来十次。我们的应对是：订单本身有状态机，处理前先看状态。</p>
-        <p>关键模型：</p>
-        <ul>
-          <li><code>Order</code>：订单主表，带支付状态，<strong>30 分钟未支付自动超时</strong>；</li>
-          <li><code>OrderProduct</code>：下单时存产品快照，避免商品后续改价影响历史订单；</li>
-          <li><code>OrderFulfillment</code>：履约状态，这是幂等的关键——已经履约过的请求直接返回成功，不重复发权益。</li>
-        </ul>
-        <p>下单时用 <code>order:{userId}</code> 分布式锁防重复提交；处理回调时用 <code>order_handle:{orderId}</code> 锁，保证同一订单不会被两个回调并发处理。</p>
+        <h2>Apple 客户端回调：一条完整的校验链</h2>
+        <p>这是防薅羊毛的核心。支付成功时不是客户端说付了就算，而是拿着交易号向苹果服务端复查，然后逐项校验：</p>
+        <pre><code>exp = http.CheckToken(ctx)                       // 1. 必须登录
+resp, err := applePayer.GetAppStoreOrder(req.AppleOrderId) // 2. 向苹果复查
+if resp.Environment == "Sandbox" && !conf.IsSandbox { ... } // 3. 沙盒回退（审核/TestFlight）
+if resp.PurchaseDate/1000 < time.Now().Unix()-86400 { ... } // 4. 购买超 24h，拒绝（防历史订单重放）
+if resp.BundleId != conf.BundleId { ... }        // 5. BundleId 必须匹配
+order, _ := order2.GetOrderFirstProduct(req.OrderId, ctx.UserId()) // 6. 带 userId 查订单
+if order.UserId != ctx.UserId() { ... }          // 7. 校验所有权
+if resp.ProductId != order.ThirdProductId { ... }// 8. 商品必须匹配</code></pre>
+        <p>这里有个很真实的细节——<strong>金额怎么处理</strong>。App Store 内购价格由 App Store Connect 强制收取、客户端无法篡改，苹果返回的 price 才是权威实付；而我们后端商品目录当时对所有商品用的是占位价 1000，并不是真实期望价。如果机械地「金额相等才放行」，所有内购都会被误判。所以 Apple 渠道是「<strong>以苹果价格为准，不一致就回写校正订单，再放行</strong>」：</p>
+        <pre><code>if resp.Price > 0 && datatype.Amount(resp.Price) != order.RealPrice {
+    db().Model(&business.Order{}).Where("id = ?", id).
+        Update("real_price", datatype.Amount(resp.Price))
+}</code></pre>
+        <p>另外，非成功状态（取消 / 失败）的回调也必须校验订单所有权，否则有人能把任意订单标记成失败。</p>
 
-        <h2>履约：策略模式按产品类型分发</h2>
-        <p>我们卖的东西形态差别很大：订阅会员、单次会员、积分加油包、盲盒、畅聊卡。履约逻辑如果都堆在一个函数里会变成巨大的 switch-case。于是抽成了策略：</p>
-        <pre><code>func getFulfiller(productType ProductType) Fulfiller {
-    switch productType {
-    case ProductTypeSubscribe, MembershipSubscription:
-        return subscriptionFulfiller{}
-    case ProductTypeMembershipOnetime:
-        return membershipOnetimeFulfiller{}
-    case ProductTypeCreditBoost:
-        return creditBoostFulfiller{}
-    case ProductTypeBlindBox:
-        return blindBoxFulfiller{}   // 放进背包
-    case ProductTypeChatPass:
-        return chatPassFulfiller{}    // 放进背包
+        <h2>微信服务端回调：验签 + 金额严格相等</h2>
+        <p>微信走的是服务端通知，先 <code>ParseNotifyData</code> 验签解密，再按 <code>trade_state</code> 映射状态：</p>
+        <pre><code>err = payer.ParseNotifyData(ctx.Request, &result) // 验签 + 解密
+if err != nil { return errors2.ErrorSecurityVerifySignError }
+
+switch result.TradeState {
+case "SUCCESS":     payStatus = enums.PayStatusSuccess
+case "CLOSED","NOTPAY": payStatus = enums.PayStatusCancel
+case "USERPAYING":  payStatus = enums.PayStatusWait
+}
+// 金额严格校验：≤0 异常，且必须与订单实付完全相等
+if result.Amount.Total <= 0 { return errors.New("回调金额异常") }
+if datatype.Amount(result.Amount.Total) != orderInfo.RealPrice {
+    return errors.New("支付金额不匹配")
+}</code></pre>
+        <p>和 Apple 相反，微信渠道金额是<strong>严格相等、不等直接拒绝</strong>。差异来自价格的 source of truth 不同：微信订单金额是我们自己下单时定的，回调金额必须等于它；Apple 内购金额由商店定、后端只是占位价。</p>
+        <p>微信的响应协议也有讲究：处理成功必须回 <code>{"code":"SUCCESS"}</code>，否则微信会持续重推。所以遇到「订单已处理」（<code>OrderRepeatHandle</code>）也回 SUCCESS，让微信停止重试；而支付成功但我们内部处理失败时，要回 500 让微信稍后重推，不能丢单。</p>
+
+        <h2>订单状态机与懒超时</h2>
+        <p>订单有 5 个状态：1 等待 / 2 取消 / 3 失败 / 4 成功 / 5 超时。超时不是靠定时任务扫，而是在模型的 <code>AfterFind</code> 钩子中「懒处理」：查询到等待支付且创建已过 30 分钟的订单，就地转成超时，并用条件更新兜底：</p>
+        <pre><code>func (o *Order) AfterFind(db *gorm.DB) error {
+    if o.PayStatus == PayStatusWait &&
+       o.CreatedAt.Add(30*time.Minute).Before(time.Now()) {
+        o.PayStatus = PayStatusTimeout
+        db.Transaction(func(tx *gorm.DB) error {
+            // 再次条件更新，防并发重复改
+            tx.Model(OrderModel).Where("id = ? AND pay_status = ?", o.ID, PayStatusWait).
+                Update("pay_status", PayStatusTimeout)
+            return nil
+        })
+    }
+    return nil
+}</code></pre>
+
+        <h2>订单处理：锁 + 终态判断 + 状态守卫</h2>
+        <p><code>HandleOrderResult</code> 用 <code>order:handle:{orderId}</code> 锁串行化，先查订单，<strong>已是终态（IsEnd）直接返回 <code>OrderRepeatHandle</code></strong>，这是回调幂等的第一道：</p>
+        <pre><code>locked, _ := cache.Lock(fmt.Sprintf("order:handle:%d", orderId), 30*time.Second)
+defer cache.Unlock(lockKey)
+order, _ := GetOrderBaseById(orderId)
+if order.PayStatus.IsEnd() { return errors2.NewError(errors2.OrderRepeatHandle) }</code></pre>
+        <p>状态更新 <code>UpdateOrderStatus</code> 在 SQL 层加了「状态守卫」，只允许从非终态更新，影响行数为 0 就安全忽略：</p>
+        <pre><code>tx := db().Where("id = ? AND pay_status NOT IN ?", orderId,
+    []PayStatus{Success, Fail, Cancel}).Updates(updateModel)
+if tx.RowsAffected == 0 { return nil } // 已终态，幂等忽略</code></pre>
+        <p>注意函数注释明确写了：<strong>本函数不校验订单归属，调用方必须先验</strong>，防止有人用别人订单号回调。</p>
+
+        <h2>两级幂等：订单级 + 交易级</h2>
+        <p>履约引擎 <code>AutoFulfill</code> 做了两层去重，这是踩过坑后补的：</p>
+        <p><strong>订单级</strong>：查 <code>OrderFulfillment</code> 是否已有该订单的成功记录，有则拒绝：</p>
+        <pre><code>tx.Model(fulfillmentModel).
+    Where("order_id = ? AND status = ?", orderId, FulfillStatusSuccess).Count(&count)
+if count > 0 { return errors2.ErrorOrderIdempotentReject }</code></pre>
+        <p><strong>交易级</strong>：订单级只按 orderId 去重，挡不住「同一笔商店交易被 StoreKit 重放 / 客户端重复下单生成了新订单」。所以再按商店交易号（Apple transactionId / Google purchaseToken，存在 <code>OrderProduct.ThirdOrderId</code>）兜底：</p>
+        <pre><code>// 找出携带同一商店交易号的其它订单，看是否已成功履约
+tx.Model(&OrderProduct{}).
+    Where("third_order_id = ? AND order_id <> ?", storeTxId, orderId).Pluck("order_id", &ids)
+tx.Model(fulfillmentModel).Where("order_id IN ? AND status = ?", ids, Success).Count(&count)
+if count > 0 { return errors2.ErrorOrderIdempotentReject }</code></pre>
+        <p>返回幂等拒绝时，客户端会把它当作「权益已发放」并结束掉那笔被重放的僵尸交易，既不重复发货，也清理了脏交易。</p>
+
+        <h2>履约状态机 + 策略模式</h2>
+        <p>履约记录有 Processing → Success / Failed 的状态：先记录开始，执行失败则置 Failed（不影响后续补发），成功置 Success。五种产品形态用策略接口分发：</p>
+        <pre><code>type Fulfiller interface {
+    Fulfill(op *business.OrderProduct, payChannel enums.PayChannel, tx *gorm.DB) error
+}
+func getFulfiller(t enums.ProductType) Fulfiller {
+    switch t {
+    case Subscribe, MembershipSubscription: return &subscriptionFulfiller{}
+    case MembershipOnetime:                 return &membershipOnetimeFulfiller{}
+    case CreditBoost:                       return &creditBoostFulfiller{}
+    case BlindBox:                          return &blindBoxFulfiller{}
+    case ChatPass:                          return &chatPassFulfiller{}
     }
 }</code></pre>
-        <p>每个履约器只关心「怎么把权益给到用户」。新上一种产品，只要加一个 fulfiller 和一个 case，老代码一行不动。</p>
+        <p>每个履约器第一步都是「反查套餐配置」。这里有个防发错货的细节：反查要同时按 <strong>appId + 商店商品 ID + 平台（Apple/Google）</strong>，因为 Apple 和 Google 可能存在同名 SKU，只按商品 ID 查会互相遮蔽：</p>
+        <pre><code>platform := subscribe.PlatformFromPayChannel(payChannel)
+pkg, err := subscribe.GetPackageByStoreProductId(op.AppId, op.ThirdProductId, platform, tx)</code></pre>
+        <p>各履约器的去向：订阅 / 单次会员 → <code>ExtendMembership</code>（订阅给 Gold 等级，单次给 Silver）；加油包 → <code>PointsIncome</code> 入加油包账户；盲盒 / 畅聊卡 → 放进背包，由用户手动激活。会员来源（Apple 订阅 / Google 订阅 / 微信单次 / 支付宝单次…）由支付渠道推断并落库，便于后续对账。</p>
 
-        <h2>几个踩过的坑</h2>
-        <ul>
-          <li><strong>金额校验不能省</strong>：回调里带的金额必须和本地订单金额比对一致才放行，否则改价/作弊订单会被放过。</li>
-          <li><strong>客户端回调也要验签</strong>：虽然校验了 UserId，但支付凭证（Apple/Google 的 receipt）要拿去向苹果/谷歌服务端二次验证，不能只看 App 传的布尔值。</li>
-          <li><strong>事务里别做外部调用</strong>：支付回调处理在数据库事务内，绝不在事务里请求 Apple/Google 服务器查收据——慢查询会把连接池打满。先验签入库，再异步补查。</li>
-        </ul>
+        <h2>内存商品目录</h2>
+        <p><code>product_catalog.go</code> 用 <code>sync.Once</code> 初始化只读注册表：<code>productCatalogMap</code>（内部 ID → 商品）和 <code>storeProductLookupMap</code>（Apple/Google 商店 ID → 商品，供履约反查）。每个商品含各商店 ID、价格、本地化展示字段（标题 / 副标题 / 角标 / 图片）、排序、以及类型特有元数据（<code>DurationDays</code> / <code>DurationHours</code> / <code>CreditAmount</code> / <code>BoxType</code>）。目录按 appId 过滤、按平台区分（Google 暂不返回盲盒与畅聊卡），商店是价格的唯一事实来源。</p>
 
-        <blockquote><p>支付系统的设计目标其实就一个：<strong>无论回调来几次、乱序来、重复来，最终结果都和「来一次」一样</strong>。幂等状态机 + 分布式锁 + 履约快照，三件套凑齐，基本就稳了。</p></blockquote>
+        <blockquote><p>支付系统的目标其实就一句话：<strong>无论回调来几次、乱序来、重复来，最终结果都和「来一次」完全一样</strong>。订单 / 履约状态机 + 分布式锁 + 两级幂等 + 履约快照凑齐，基本就稳了；而不同渠道「金额严格还是校正」这种差异，必须顺着各自的事实来源来，不能一刀切。</p></blockquote>
       </div>
     </article>
     <script src="/assets/js/main.js"></script>
