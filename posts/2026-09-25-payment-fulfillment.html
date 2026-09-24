@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>多渠道支付回调与幂等履约：订单管线设计笔记 · sanmua</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <script src="/assets/js/theme.js"></script>
+    <link rel="stylesheet" href="/assets/css/main.css" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+  </head>
+  <body>
+    <article class="prose">
+      <header class="prose__header">
+        <a class="prose__back" href="/">&larr; 返回首页</a>
+        <h1 class="prose__title">多渠道支付回调与幂等履约：订单管线设计笔记</h1>
+        <div class="prose__meta"><span>2026-09-25</span><span>Go</span><span>支付</span></div>
+      </header>
+
+      <div class="article-body">
+        <p>平台同时接了微信支付、支付宝，以及 Apple / Google 的应用内购买和订阅。支付是最不能出错的环节——钱收了但权益没到、回调重复发、并发下单，任何一个出问题都是真金白银。这篇记录订单管线是怎么设计的。</p>
+
+        <h2>整条链路</h2>
+        <pre><code>用户下单  →  order_create.go（分布式锁 + 事务）
+    ↓
+支付回调  →  callback/（验签、校金额）
+    ↓        ↓            ↓              ↓
+  微信    支付宝       Apple 订阅       Google 订阅
+  服务端回调 服务端回调   服务端通知       Pub/Sub push
+    ↓
+订单处理  →  order_handle.go（HandleOrderResult，幂等检查）
+    ↓
+自动履约  →  fulfillment/（策略模式，按产品类型分发）</code></pre>
+
+        <h2>回调分两类，鉴权方式不同</h2>
+        <p>这是最关键的一个区分：</p>
+        <ul>
+          <li><strong>服务端回调</strong>（微信、支付宝、Apple/Google 订阅通知）：支付平台直接请求我们的服务器，我们必须<strong>验证签名</strong>，不能信回调里的任何字段；</li>
+          <li><strong>客户端回调</strong>（Apple Pay、Google Pay 一次性购买）：是 App 端发请求告诉我们「我付好了」，这种请求用户可控，所以必须校验 <code>ctx.UserId == order.UserId</code>，防止有人伪造别人的订单号来薅会员。</li>
+        </ul>
+
+        <h2>幂等：防的是「回调重复」</h2>
+        <p>支付平台的回调机制是「没收到 200 就一直重发」。所以同一个回调可能来十次。我们的应对是：订单本身有状态机，处理前先看状态。</p>
+        <p>关键模型：</p>
+        <ul>
+          <li><code>Order</code>：订单主表，带支付状态，<strong>30 分钟未支付自动超时</strong>；</li>
+          <li><code>OrderProduct</code>：下单时存产品快照，避免商品后续改价影响历史订单；</li>
+          <li><code>OrderFulfillment</code>：履约状态，这是幂等的关键——已经履约过的请求直接返回成功，不重复发权益。</li>
+        </ul>
+        <p>下单时用 <code>order:{userId}</code> 分布式锁防重复提交；处理回调时用 <code>order_handle:{orderId}</code> 锁，保证同一订单不会被两个回调并发处理。</p>
+
+        <h2>履约：策略模式按产品类型分发</h2>
+        <p>我们卖的东西形态差别很大：订阅会员、单次会员、积分加油包、盲盒、畅聊卡。履约逻辑如果都堆在一个函数里会变成巨大的 switch-case。于是抽成了策略：</p>
+        <pre><code>func getFulfiller(productType ProductType) Fulfiller {
+    switch productType {
+    case ProductTypeSubscribe, MembershipSubscription:
+        return subscriptionFulfiller{}
+    case ProductTypeMembershipOnetime:
+        return membershipOnetimeFulfiller{}
+    case ProductTypeCreditBoost:
+        return creditBoostFulfiller{}
+    case ProductTypeBlindBox:
+        return blindBoxFulfiller{}   // 放进背包
+    case ProductTypeChatPass:
+        return chatPassFulfiller{}    // 放进背包
+    }
+}</code></pre>
+        <p>每个履约器只关心「怎么把权益给到用户」。新上一种产品，只要加一个 fulfiller 和一个 case，老代码一行不动。</p>
+
+        <h2>几个踩过的坑</h2>
+        <ul>
+          <li><strong>金额校验不能省</strong>：回调里带的金额必须和本地订单金额比对一致才放行，否则改价/作弊订单会被放过。</li>
+          <li><strong>客户端回调也要验签</strong>：虽然校验了 UserId，但支付凭证（Apple/Google 的 receipt）要拿去向苹果/谷歌服务端二次验证，不能只看 App 传的布尔值。</li>
+          <li><strong>事务里别做外部调用</strong>：支付回调处理在数据库事务内，绝不在事务里请求 Apple/Google 服务器查收据——慢查询会把连接池打满。先验签入库，再异步补查。</li>
+        </ul>
+
+        <blockquote><p>支付系统的设计目标其实就一个：<strong>无论回调来几次、乱序来、重复来，最终结果都和「来一次」一样</strong>。幂等状态机 + 分布式锁 + 履约快照，三件套凑齐，基本就稳了。</p></blockquote>
+      </div>
+    </article>
+    <script src="/assets/js/main.js"></script>
+  </body>
+</html>

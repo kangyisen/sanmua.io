@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>三账户积分设计：普通积分、会员积分与加油包的记账与消费优先级 · sanmua</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <script src="/assets/js/theme.js"></script>
+    <link rel="stylesheet" href="/assets/css/main.css" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+  </head>
+  <body>
+    <article class="prose">
+      <header class="prose__header">
+        <a class="prose__back" href="/">&larr; 返回首页</a>
+        <h1 class="prose__title">三账户积分设计：普通积分、会员积分与加油包的记账与消费优先级</h1>
+        <div class="prose__meta"><span>2026-09-25</span><span>Go</span><span>设计</span></div>
+      </header>
+
+      <div class="article-body">
+        <p>做内容产品，积分体系是绕不开的。我们的积分不是单一池子，而是拆成了<strong>三个独立账户</strong>，各自有不同的过期规则和来源。一开始图省事想塞在一个字段里，后来发现会出大问题，记录一下设计过程。</p>
+
+        <h2>为什么要拆三个账户</h2>
+        <p>业务上有三种积分，过期规则完全不同：</p>
+        <table>
+          <thead><tr><th>账户</th><th>DB 字段</th><th>过期规则</th><th>主要来源</th></tr></thead>
+          <tbody>
+            <tr><td>普通积分</td><td>points</td><td>永不过期</td><td>签到、盲盒奖励、管理员赠送</td></tr>
+            <tr><td>会员积分</td><td>member_points</td><td>随会员到期一起过期</td><td>订阅 / 单买会员时充值</td></tr>
+            <tr><td>加油包积分</td><td>boost_points</td><td>永不过期</td><td>单独购买的积分加油包</td></tr>
+          </tbody>
+        </table>
+        <p>如果合成一个 <code>points</code> 字段，就没法区分哪些积分随会员过期、哪些永远有效——会员到期时到底要清掉多少？算不清。所以必须分账户、分流水。</p>
+
+        <h2>消费扣减优先级</h2>
+        <p>用户聊天要扣积分时，先扣哪个账户？业务定的优先级是：</p>
+        <pre><code>畅聊卡（有效期内直接跳过，不扣积分）
+  → 会员积分（最贵、会过期，先用掉）
+  → 加油包积分
+  → 普通积分（最便宜、永不过期，留到最后）</code></pre>
+        <p>这个顺序是从「用户价值最大化」倒推的：<strong>快过期、贵的先扣，便宜的、永久的后扣</strong>。不然会员积分留在账户里过期作废，用户会来投诉。</p>
+
+        <h2>入账和流水统一收口</h2>
+        <p>积分入账散落在很多地方：签到、履约、管理员调整、会员到期转换。如果每个地方都自己写 <code>UPDATE user SET points = points + ?</code>，迟早漏。所以统一收口到一个函数：</p>
+        <pre><code>user.PointsIncome(userId, points, remark, recordType, accountType, tx)</code></pre>
+        <p>它必须在<strong>事务内</strong>调用，同时写账户余额和流水记录。每一笔积分变动都有流水可查，出了问题能对账。</p>
+
+        <h2>并发扣减怎么不超扣</h2>
+        <p>用户并发发两条消息，可能同时读同一个积分余额，都判断「够」，都扣，结果扣成负数。两个手段：</p>
+        <ul>
+          <li>分布式锁 <code>points_consume:{userId}</code>，把同一用户的扣减串行化；</li>
+          <li>数据库兜底：扣减 SQL 写成 <code>UPDATE ... SET points = points - ? WHERE points >= ?</code>，影响行数为 0 就是余额不足。</li>
+        </ul>
+
+        <h2>踩过的坑</h2>
+        <ul>
+          <li><strong>会员积分过期不能硬删</strong>：会员到期时不能直接把 member_points 清零，要按业务规则处理（我们早期做过「会员到期转普通积分」，后来产品取消了这个逻辑，但流水里要能查到历史）。</li>
+          <li><strong>金额用整数不用浮点</strong>：积分本质是钱，DB 里用 int64，展示层再格式化，避免浮点误差。</li>
+        </ul>
+
+        <blockquote><p>这套设计的核心是：<strong>不同生命周期的钱，必须放在不同的账户里</strong>。一个字段存所有积分，短期省事，长期一定在对账和过期规则上爆炸。</p></blockquote>
+      </div>
+    </article>
+    <script src="/assets/js/main.js"></script>
+  </body>
+</html>

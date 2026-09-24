@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>一个仓库拆出 C 端 App 与 B 端后台：双服务架构实践 · sanmua</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <script src="/assets/js/theme.js"></script>
+    <link rel="stylesheet" href="/assets/css/main.css" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+  </head>
+  <body>
+    <article class="prose">
+      <header class="prose__header">
+        <a class="prose__back" href="/">&larr; 返回首页</a>
+        <h1 class="prose__title">一个仓库拆出 C 端 App 与 B 端后台：双服务架构实践</h1>
+        <div class="prose__meta"><span>2026-09-25</span><span>Go</span><span>架构</span></div>
+      </header>
+
+      <div class="article-body">
+        <p>最近在做一个 AI 角色扮演社交平台，基于 gin-vue-admin（GVA）二开。它同时要服务两类用户：手机端 C 端用户，和公司内部的 B 端管理后台。最自然的想法是拆成两个服务，但又不想维护两套代码——最后落在了「<strong>一个仓库、一个二进制镜像、两个入口</strong>」的方案上，记录一下取舍。</p>
+
+        <h2>为什么要拆</h2>
+        <p>C 端和 B 端的诉求几乎是反的：</p>
+        <ul>
+          <li>C 端面向海量移动端用户，接口要轻、鉴权要快、要做 DAU 统计，错误要多语言；</li>
+          <li>B 端是内部管理，要 RBAC（Casbin）、操作日志、复杂的管理列表，用户量小但权限细。</li>
+        </ul>
+        <p>如果硬塞在一个 Gin 路由组里，中间件会变成「如果是管理接口就怎样，如果是 App 接口就怎样」的层层 if，维护起来很痛苦。拆成两个进程，端口、鉴权、日志、甚至 Swagger 文档都能各管各的。</p>
+
+        <h2>目录怎么组织</h2>
+        <p>关键是把「共享的东西」和「各自的东西」分开：</p>
+        <pre><code>server/
+├── cmd/
+│   ├── app/         # C 端入口 main.go + 专属路由
+│   ├── platform/    # B 端入口 main.go + 专属路由
+│   └── internal/     # 共享：Viper 配置、Zap 日志、Gin 引擎启动
+├── api/v1/
+│   ├── app/         # C 端 handler
+│   ├── platform/    # B 端 handler
+│   └── internal/    # handler 包装器（鉴权模式）
+├── services/
+│   ├── app/         # C 端业务逻辑
+│   ├── platform/    # B 端业务逻辑
+│   └── common/      # 共享：错误码、HTTP 封装、存储、第三方 SDK
+├── model/           # 共享数据模型
+└── global/          # 共享单例（DB、Redis、Logger…）</code></pre>
+
+        <p>两个服务共享 <code>cmd/internal</code>（启动引导）、<code>model/</code>、<code>services/common/</code>、<code>global/</code>，但各有各的 <code>cmd/&lt;name&gt;/main.go</code> 和路由注册：</p>
+        <table>
+          <thead><tr><th>服务</th><th>入口</th><th>端口</th><th>鉴权</th></tr></thead>
+          <tbody>
+            <tr><td>App（C 端）</td><td>cmd/app/main.go</td><td>9259</td><td>自定义 JWT（x-token）</td></tr>
+            <tr><td>Platform（B 端）</td><td>cmd/platform/main.go</td><td>9258</td><td>JWT + Casbin RBAC</td></tr>
+          </tbody>
+        </table>
+
+        <h2>最容易踩的坑：两套 handler 风格</h2>
+        <p>GVA 原本是标准 Gin handler——直接写 <code>c.JSON()</code>。但 C 端我们想要统一的 <code>{"code":0,"msg":"success","data":{}}</code> 响应，还要做 panic 恢复和多语言。于是 C 端 handler 改成了「返回 (data, error)，由包装器统一写响应」的模式：</p>
+        <pre><code>// C 端：业务只关心返回什么数据
+type HandlerFunc func(ctx *http.Context) (interface{}, error)
+
+// 包装器按鉴权模式包一层
+AppAuth(handler)     // 必须登录，记录 DAU，失败 401
+SelectAuth(handler)   // 登录了就拿用户信息，没登录也放行
+NoAuth(handler)      // 完全开放</code></pre>
+        <p>所有包装器内部都做了 panic recovery，把 panic 转成统一错误响应；还检查 <code>ctx.Writer.Written()</code>，给 WebSocket 升级放行。这样业务 handler 里几乎看不到重复的 try-catch 样板。</p>
+
+        <h2>一个让我少写一半代码的决定</h2>
+        <p>B 端经常要管理 C 端的数据（比如审核用户、看订单）。一开始我打算在 <code>services/platform/</code> 里再写一套管理逻辑，后来发现完全没必要——<strong>Platform 的 handler 直接 import <code>services/app/</code> 复用 C 端业务</strong>，只在外层加 Casbin 鉴权和操作日志。B 端不再有独立的业务 Service 层，避免了两套逻辑漂移。</p>
+
+        <h2>部署</h2>
+        <p>最终是同一个 Go 镜像，两条启动命令：<code>./app -c config-app.yaml</code> 和 <code>./platform -c config-platform.yaml</code>，docker-compose 起两个容器，Nginx 按路径反代（<code>/api/</code> 走 C 端，<code>/platform/</code> 走 B 端）。镜像只构建一次，运维也简单。</p>
+
+        <blockquote><p>这套拆法的核心不是「微服务」，而是「<strong>同一套代码，按入口分治</strong>」。两个进程共享 80% 的模型和公共逻辑，只在入口、鉴权、响应风格上分道扬镳。对中小团队来说，比真拆成两个仓库靠谱得多。</p></blockquote>
+      </div>
+    </article>
+    <script src="/assets/js/main.js"></script>
+  </body>
+</html>

@@ -1,11 +1,42 @@
 [
   {
+    "title": "三账户积分设计：普通积分、会员积分与加油包",
+    "href": "/posts/2026-09-25-points-system.html",
+    "date": "2026-09-25",
+    "tags": ["Go", "设计"],
+    "excerpt": "不同生命周期的钱为什么必须分账户，以及消费扣减优先级是怎么定的。",
+    "isNew": true
+  },
+  {
+    "title": "Redis 分布式锁在订单、积分、续期里的五个场景",
+    "href": "/posts/2026-09-25-redis-distributed-lock.html",
+    "date": "2026-09-25",
+    "tags": ["Go", "Redis"],
+    "excerpt": "锁粒度、30 秒超时、unlock 时机，以及为什么数据库约束才是最终防线。",
+    "isNew": true
+  },
+  {
+    "title": "多渠道支付回调与幂等履约：订单管线设计",
+    "href": "/posts/2026-09-25-payment-fulfillment.html",
+    "date": "2026-09-25",
+    "tags": ["Go", "支付"],
+    "excerpt": "微信/支付宝/Apple/Google 回调怎么验签，策略模式分发履约，以及幂等三件套。",
+    "isNew": true
+  },
+  {
+    "title": "一个仓库拆出 C 端 App 与 B 端后台：双服务架构",
+    "href": "/posts/2026-09-25-dual-service-architecture.html",
+    "date": "2026-09-25",
+    "tags": ["Go", "架构"],
+    "excerpt": "基于 gin-vue-admin 二开，一个仓库、一个镜像、两个入口的分治实践。",
+    "isNew": true
+  },
+  {
     "title": "学习数据库的笔记",
     "href": "/sjk.html",
     "date": "2025-06-01",
     "tags": ["数据库"],
-    "excerpt": "数据库学习过程中整理的知识体系与实战笔记。",
-    "isNew": true
+    "excerpt": "数据库学习过程中整理的知识体系与实战笔记。"
   },
   {
     "title": "我的编程学习之路",
