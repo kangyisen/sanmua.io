@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>条件-效果规则引擎：AI 互动叙事的配置化设计 · sanmua</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <script src="/assets/js/theme.js"></script>
+    <link rel="stylesheet" href="/assets/css/main.css" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+  </head>
+  <body>
+    <article class="prose">
+      <header class="prose__header">
+        <a class="prose__back" href="/">&larr; 返回首页</a>
+        <h1 class="prose__title">条件-效果规则引擎：AI 互动叙事的配置化设计</h1>
+        <div class="prose__meta"><span>2026-10-04</span><span>Go</span><span>AI</span><span>编程</span></div>
+      </header>
+
+      <div class="article-body">
+        <p>Lunetale 是面向海外、已上线 App Store 的 AI 互动视觉小说平台，分支剧情、地图热点、NPC 状态、任务背包、多结局全都要支持。最早这些逻辑写死在 Go 代码里，运营要加一条分支、改一个解锁条件，都得我改代码、跟着发版。上线后剧情改动频率远高于后端改动，这个模式完全扛不住。于是我在 Genesis 叙事引擎 V2 里把这套东西抽成了一套「条件-效果」规则引擎：剧情侧只填配置，核心代码一行不改就能上一条新分支。这篇讲清楚它怎么设计。</p>
+
+        <h2>为什么不能把剧情写死在代码里</h2>
+        <p>一开始为了快，分支判断就是一堆 <code>if/else</code>。问题很快暴露：每加一个地图热点要改路由、每加一个结局要加枚举；剧情策划不懂 Go，所有需求都堆在我这。更麻烦的是同一套叙事要跑在 C 端 App 上，改一次就要重新发版。结论很直接：<strong>会变的部分（剧情数据）和稳定的部分（引擎）必须分开</strong>。</p>
+
+        <h2>规则的数据结构：Condition 与 Effect</h2>
+        <p>核心是两条结构。一条规则 = 一组条件（全部满足才触发）+ 一组效果（按顺序执行）。条件只读玩家上下文，效果只改玩家上下文，职责切干净：</p>
+        <pre><code>type Rule struct {
+    ID        uint
+    SceneID   string
+    Priority  int         // 数值大的先匹配
+    Once      bool        // 是否只触发一次
+    Condition []Condition `json:"condition"`
+    Effect    []Effect    `json:"effect"`
+}
+
+type Condition struct {
+    Fact     string      `json:"fact"` // 如 quest.has_item / npc.rep
+    Operator string      `json:"op"`   // eq gt lt in not
+    Value    interface{} `json:"value"`
+}
+
+type Effect struct {
+    Action string      `json:"action"` // add_item set_flag goto_scene unlock_ending
+    Target string      `json:"target"`
+    Value  interface{} `json:"value"`
+}</code></pre>
+
+        <h2>求值循环：自上而下匹配，命中即执行</h2>
+        <p>玩家进入场景或做出选择时，引擎把该场景下的规则按 Priority 排序逐条求值。条件全过就执行效果，Once 规则执行完打标，下次不再命中：</p>
+        <pre><code>func (e *Engine) Evaluate(ctx *EvalContext, sceneID string) ([]Effect, error) {
+    rules := e.store.ByScene(sceneID).SortByPriority()
+    var applied []Effect
+    for _, r := range rules {
+        if r.Once &amp;&amp; ctx.Fired(r.ID) {
+            continue
+        }
+        if allMatch(r.Condition, ctx) {
+            for _, fx := range r.Effect {
+                if err := applyEffect(ctx, fx); err != nil {
+                    return applied, err
+                }
+            }
+            ctx.MarkFired(r.ID)
+            applied = append(applied, r.Effect...)
+        }
+    }
+    return applied, nil
+}
+
+func allMatch(conds []Condition, ctx *EvalContext) bool {
+    for _, c := range conds {
+        if !compare(ctx.Get(c.Fact), c.Operator, c.Value) {
+            return false
+        }
+    }
+    return true
+}</code></pre>
+
+        <h2>条件里能查什么：摊平的 Fact 上下文</h2>
+        <p>Fact 是一串点路径，比如 <code>quest.rep.npc_01</code>、<code>bag.item.key_3</code>、<code>flag.met_old_man</code>。引擎的 EvalContext 把玩家的背包、任务进度、NPC 好感度、全局 flag 都摊平成一张 map，条件只跟这张 map 打交道，不直接碰数据库。这样求值纯内存、可重放、好写测试：</p>
+        <pre><code>type EvalContext struct {
+    PlayerID uint
+    facts    map[string]interface{}
+    fired    map[uint]bool
+}
+
+func (c *EvalContext) Get(fact string) interface{} {
+    return c.facts[fact]
+}</code></pre>
+
+        <h2>效果里能干什么：一小撮叙事原语</h2>
+        <p>效果 action 是引擎内置的一小撮动词，剧情作者只选动词、填参数，覆盖了我们要的全部叙事原语：</p>
+        <ul>
+          <li><code>add_item</code> / <code>remove_item</code>：改背包；</li>
+          <li><code>set_flag</code> / <code>add_rep</code>：打标记、加 NPC 好感度；</li>
+          <li><code>goto_scene</code>：切地图热点；</li>
+          <li><code>unlock_ending</code>：登记结局解锁，多结局靠它收口。</li>
+        </ul>
+        <p>关键约束：<strong>效果只能改内存上下文，不能在引擎里发请求、不能直接写库</strong>。落库由外层事务统一做，引擎只管「算出这次该变什么」，边界清楚才好测。</p>
+
+        <h2>配置化：规则存在数据库，热更新</h2>
+        <p>规则整张存在 PostgreSQL，运营在后台填表，前端存成 JSON。引擎启动时加载，或按场景懒加载后放 Redis。改一条规则不用发版，刷一下缓存就生效。多结局也是配置：结局节点本身就是一条 <code>unlock_ending</code> 效果，触发即记录，无需在代码里枚举结局。</p>
+
+        <h2>被生产环境教出来的细节</h2>
+        <ul>
+          <li>求值顺序：Priority 高的先匹配，先命中的 Once 规则会短路后面，策划必须清楚排序语义；</li>
+          <li>幂等：效果里的 <code>add_item</code> 要按规则 ID 去重，否则一次进入场景重复触发会刷物品；</li>
+          <li>类型：Fact 值有 int / string / bool，比较前要统一成同型，否则 <code>1</code> 和 <code>"1"</code> 会误判相等。</li>
+        </ul>
+
+        <blockquote><p>核心经验：<strong>把「会变的剧情」降级成数据，把「不变的引擎」收敛成代码</strong>。条件-效果这套模型笨但够用——它没有 DSL、没有脚本沙箱，却把分支、地图热点、NPC 状态、背包与多结局全部配置化，支撑多线多结局叙事而无需改核心代码。</p></blockquote>
+      </div>
+    </article>
+    <script src="/assets/js/main.js"></script>
+  </body>
+</html>

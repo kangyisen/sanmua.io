@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>多智能体同场对话：双通道架构与消息原子落库 · sanmua</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <script src="/assets/js/theme.js"></script>
+    <link rel="stylesheet" href="/assets/css/main.css" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+  </head>
+  <body>
+    <article class="prose">
+      <header class="prose__header">
+        <a class="prose__back" href="/">&larr; 返回首页</a>
+        <h1 class="prose__title">多智能体同场对话：双通道架构与消息原子落库</h1>
+        <div class="prose__meta"><span>2026-10-04</span><span>Go</span><span>AI</span><span>编程</span></div>
+      </header>
+
+      <div class="article-body">
+        <p>单智能体聊多了不够用，产品要让多个 AI 角色同场对话：用户一句下去，可能同时有好几个角色接话，还要分主次模型。这套 AI 多智能体对话系统是我在 Lunetale 上做的，要稳住三件事：SSE 和 WebSocket 怎么分工、扣费和消息落库怎么做到不丢不重，以及语音转写和多语言翻译怎么接。这篇把架构和最容易出事故的扣费环节讲清楚。</p>
+
+        <h2>双通道为什么：一条管流，一条管场</h2>
+        <p>一开始我图省事想用一条 WebSocket 通吃，做下来发现两类消息节奏完全不同。逐字生成是高频、单向、只给发起方的；角色入场、轮到谁说话是低频、要广播给全场的。硬塞一条通道，前端要靠事件类型自己分辨，流式一卡还影响房间状态。拆开反而清晰：</p>
+        <table>
+          <thead><tr><th></th><th>SSE 通道</th><th>WebSocket 通道</th></tr></thead>
+          <tbody>
+            <tr><td>方向</td><td>服务端单向推</td><td>双向</td></tr>
+            <tr><td>典型事件</td><td><code>delta</code> / <code>done</code> 逐字流</td><td>角色入场、轮到发言、心跳</td></tr>
+            <tr><td>受众</td><td>当前发起请求的用户</td><td>整个房间在线成员</td></tr>
+          </tbody>
+        </table>
+        <p>分发时按事件类型选通道：</p>
+        <pre><code>func (s *Service) Push(sessionID string, event Event) {
+    if event.Stream { // 逐字生成走 SSE，只推给发起方
+        s.sse.PushTo(sessionID, event)
+    } else {         // 房间状态走 WS，广播给全场
+        s.ws.Broadcast(sessionID, event)
+    }
+}</code></pre>
+
+        <h2>多模型路由：会话级参数决定走哪个模型</h2>
+        <p>系统里接了 Gemini / OpenAI / DeepSeek 多家模型。同一个会话带一份参数配置，主角色用贵的好模型，旁白、群杂用便宜模型。路由逻辑就一句话：会话指定了就用指定的，没指定回落默认：</p>
+        <pre><code>func (r *Router) Resolve(cfg SessionConfig) (string, error) {
+    if cfg.Model != "" { // 会话级配置优先
+        return cfg.Model, nil
+    }
+    return r.defaultModel, nil
+}</code></pre>
+
+        <h2>扣费与落库：必须在同一个事务里</h2>
+        <p>这是最容易出资金事故的地方。一次对话要做两件事：扣用户积分、把消息写进库。如果分开做，扣了费落库失败用户会投诉，落了库扣费失败平台白送。正确做法是<strong>用一个数据库事务把两者绑死</strong>，要么都成要么都回滚。扣费还用条件更新兜住并发：余额不够就影响 0 行，直接报错，不会扣成负数：</p>
+        <pre><code>func (s *Service) SendMessage(ctx context.Context, in SendInput) (*Message, error) {
+    var msg *Message
+    err := s.db.Transaction(func(tx *gorm.DB) error {
+        // 条件扣费：余额不足则影响 0 行，视为失败
+        res := tx.Model(&Account{}).
+            Where("user_id = ? AND points - frozen &gt;= ?", in.UserID, in.Cost).
+            Update("points", gorm.Expr("points - ?", in.Cost))
+        if res.RowsAffected == 0 {
+            return errInsufficientPoints
+        }
+        // 同一事务里落消息，扣费与写库同生共死
+        m := &Message{
+            UserID:         in.UserID,
+            SessionID:      in.SessionID,
+            Role:           "user",
+            Content:        in.Content,
+            IdempotencyKey: in.IdempotencyKey,
+        }
+        if err := tx.Create(m).Error; err != nil {
+            return err
+        }
+        msg = m
+        return nil
+    })
+    return msg, err
+}</code></pre>
+
+        <h2>不丢不重：幂等键加唯一索引</h2>
+        <p>网络重试、用户手抖点两次，都会让同一条消息进来两遍。我们让前端带一个幂等键，数据库对它建唯一索引——重发时 <code>Create</code> 撞唯一约束，事务回滚，再把已存在的消息原样返回。这样「不丢」靠事务提交，「不重」靠唯一索引，不依赖前端有多克制：</p>
+        <pre><code>type Message struct {
+    ID             uint
+    SessionID      string
+    IdempotencyKey string `gorm:"uniqueIndex:uk_idem"` // 重复请求在此处被拦下
+}</code></pre>
+
+        <h2>语音转写与多语言翻译怎么接</h2>
+        <p>产品面向海外多语言用户，输入不只文字。语音消息先走转写得到文本，再走正常对话；需要时再把回复翻译回用户语言。这两步都是独立的、可失败的旁路，<strong>不放进上面那个扣费事务</strong>——转写或翻译失败只影响体验，绝不能反过来把已经成功的扣费一起回滚掉。它们失败时降级成「直接发原文」，保证对话链路不断。</p>
+
+        <h2>被生产环境教出来的细节</h2>
+        <ul>
+          <li>流式事件和广播事件务必分通道，混在一起会让前端在逐字更新时还要处理房间状态，bug 特别难查；</li>
+          <li>扣费金额随模型走，换模型前先把单次成本算清，别用便宜模型的余额去预期贵模型的消耗；</li>
+          <li>转写、翻译这种旁路服务超时要短、重试要少，拖慢的是用户这一次对话的体感。</li>
+        </ul>
+
+        <blockquote><p>核心经验：<strong>双通道让「流式」和「房间」各走各的路，事务加唯一索引让扣费和落库同生共死</strong>。多智能体系统要稳，关键不是模型多强，而是钱和消息这两条线——扣费与写库一个事务保证强一致，幂等键加唯一索引保证不丢不重，旁路的转写翻译宁可降级也不拖垮主链路。</p></blockquote>
+      </div>
+    </article>
+    <script src="/assets/js/main.js"></script>
+  </body>
+</html>

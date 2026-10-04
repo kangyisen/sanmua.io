@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OJ 判题沙箱：FastAPI 微服务与 Docker 隔离评测 · sanmua</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <script src="/assets/js/theme.js"></script>
+    <link rel="stylesheet" href="/assets/css/main.css" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+  </head>
+  <body>
+    <article class="prose">
+      <header class="prose__header">
+        <a class="prose__back" href="/">&larr; 返回首页</a>
+        <h1 class="prose__title">OJ 判题沙箱：FastAPI 微服务与 Docker 隔离评测</h1>
+        <div class="prose__meta"><span>2026-10-04</span><span>Python</span><span>Docker</span><span>编程</span></div>
+      </header>
+
+      <div class="article-body">
+        <p>主站负责题目、提交、排行榜，本身是典型的 Web 业务。但「跑用户提交的代码」这件事天生和 Web 不是一类工作：它不可信、吃资源、语言五花八门。把它和主站揉在一个进程里，等于把陌生人的代码放进自己的内存空间。所以在这个在线判题系统里，我把评测单独拆成一个 FastAPI 微服务，用 Docker 做隔离。这篇讲清楚为什么要拆、一次提交怎么跑、容器的 CPU/内存/时间/网络到底怎么限。</p>
+
+        <h2>为什么把判题从主站解耦出去</h2>
+        <p>一开始我也想图省事，在主站里直接起进程跑用户代码。做了两天就放弃了，理由很现实：</p>
+        <ul>
+          <li><strong>安全</strong>：用户代码里写 <code>os.system("rm -rf /")</code>、读宿主环境变量、连内网数据库，主站进程会跟着遭殃；</li>
+          <li><strong>资源隔离</strong>：一份死循环或者超大数组不能把整个主站拖垮；</li>
+          <li><strong>可独立扩缩</strong>：评测是 CPU 密集且排队的活儿，主站闲、评测忙时只加评测节点即可；</li>
+          <li><strong>语言镜像独立</strong>：C/C++、Python、Java 用各自的基础镜像，升级一种语言不碰其他。</li>
+        </ul>
+        <p>于是主站只做一件事：接收提交，丢进队列，把结果写库。真正跑代码的全在判题服务里。</p>
+
+        <h2>一次提交的完整评测流水线</h2>
+        <p>判题服务从队列拿到一条提交后，流程是固定的几步：拉题目与测试点 → 起容器 → 编译 → 逐个测试点运行并比对 → 回收容器。FastAPI 这层很薄，只做路由和编排，重活全交给容器：</p>
+        <pre><code>@app.post("/judge")
+async def judge(submission: SubmissionIn):
+    # 1. 从题目服务拉测试点（示例：内存里取，真实走题目微服务）
+    problem = await problem_client.fetch(submission.problem_id)
+    # 2. 丢进异步任务，立刻返回，评测在后台慢慢跑
+    asyncio.create_task(run_case(submission, problem))
+    return {"status": "queued", "submission_id": submission.id}</code></pre>
+        <p>评测不阻塞接口，前端轮询或等回调拿结果，这是判题服务能扛住并发提交的前提。</p>
+
+        <h2>用 Docker SDK 起一个受限容器</h2>
+        <p>核心是跑起来之前把「权限」先收紧。我用官方 <code>docker</code> Python SDK，一次 <code>containers.run</code> 把 CPU、内存、网络、文件系统都限死：</p>
+        <pre><code>import docker
+client = docker.from_env()
+
+def run_in_container(image, cmd, source_dir, time_limit, mem_limit):
+    return client.containers.run(
+        image=image,
+        command=cmd,
+        volumes={source_dir: {"bind": "/workspace", "mode": "rw"}},
+        working_dir="/workspace",
+        detach=True,
+        remove=True,                 # 跑完自动删，不留垃圾容器
+        network_disabled=True,        # 断网，杜绝反向连外网/内网
+        mem_limit=f"{mem_limit}m",   # 内存硬上限
+        nano_cpus=int(0.5 * 1e9),     # 等于 --cpus 0.5，半核
+        read_only=True,              # 根文件系统只读
+        tmpfs={"/tmp": "size=64m"},  # 只给 /tmp 一块可写临时卷
+    )</code></pre>
+        <p>这里几个参数是「被生产环境教出来的细节」：<code>network_disabled</code> 直接断掉网络，比任何防火墙规则都干净；<code>read_only</code> 加 <code>tmpfs</code> 是因为程序运行时难免要写临时文件，全只读会误杀正常程序，于是只放行一块明确大小的临时盘。</p>
+
+        <h2>时间限制：超时必须硬杀</h2>
+        <p>CPU 和内存靠 Docker 内核层面限制，但「超时」不能只靠容器自己掐。死循环的进程不会自己退出，必须由外部看门狗在到点时强制结束：</p>
+        <pre><code>import time
+
+def run_with_timeout(container, time_limit_s):
+    start = time.time()
+    result = container.wait()   # 阻塞等容器结束
+    elapsed = time.time() - start
+    if elapsed &gt; time_limit_s or container.status == "running":
+        container.kill()        # 到点还在跑，直接杀掉，判 TLE
+        return {"verdict": "TLE", "elapsed": elapsed}
+    return {"verdict": "OK", "elapsed": elapsed}</code></pre>
+        <p>判 TLE（Time Limit Exceeded）的依据是「墙钟时间超过阈值就 kill」，而不是等它自己跑完。内存超限则由 Docker 的 <code>mem_limit</code> 触发 OOM，进程被内核杀掉，对应 MLE。</p>
+
+        <h2>编译与逐测试点比对</h2>
+        <p>不同语言的动作不一样：C/C++ 要先 <code>g++</code> 编译再运行，Python/Java 视情况直接解释运行。编译失败直接判 Compile Error；编译过了，再把每个测试点的输入喂进容器，拿标准输出和期望输出逐行比对：</p>
+        <pre><code>def evaluate(proc_out, expected):
+    # 忽略末尾空行差异，避免 PE 误判
+    out = proc_out.strip().splitlines()
+    exp = expected.strip().splitlines()
+    if out == exp:
+        return "AC"
+    return "WA"</code></pre>
+        <p>编译和运行用不同镜像阶段：编译镜像带编译器，运行镜像尽量精简，两者职责分开，也让运行时更安全。</p>
+
+        <h2>资源限制一览</h2>
+        <p>把上面散落的限制汇总成一张表，方便对照 <code>docker run</code> 的等价参数：</p>
+        <table>
+          <thead><tr><th>风险</th><th>做法</th><th>等价 docker run</th></tr></thead>
+          <tbody>
+            <tr><td>吃满 CPU</td><td><code>nano_cpus</code> 限核数</td><td><code>--cpus 0.5</code></td></tr>
+            <tr><td>爆内存</td><td><code>mem_limit</code> 硬上限</td><td><code>--memory 256m</code></td></tr>
+            <tr><td>死循环</td><td>外部超时 <code>kill</code></td><td><code>timeout</code> 命令 / 看门狗</td></tr>
+            <tr><td>连外网</td><td><code>network_disabled</code></td><td><code>--network none</code></td></tr>
+            <tr><td>改宿主文件</td><td>只读根 + tmpfs</td><td><code>--read-only --tmpfs /tmp</code></td></tr>
+          </tbody>
+        </table>
+
+        <h2>用 Compose 一键编排判题服务</h2>
+        <p>判题服务本身依赖题目接口、队列、数据库，手起手停很容易漏。我把它写进 <code>docker-compose.yml</code>，评测服务和依赖一起拉起，<code>privileged</code> 之外不额外放权——它自己要能起子容器，所以挂了宿主的 <code>/var/run/docker.sock</code>：</p>
+        <pre><code>services:
+  judge:
+    build: ./judge
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    deploy:
+      resources:
+        limits:
+          memory: 2g</code></pre>
+        <p>挂 docker.sock 意味着判题服务拥有「起容器」的能力，这是它能当沙箱父进程的前提；但每一个被它起的评测容器又都被限得很死，形成「父服务有权限、子任务被关在笼子里」的两层结构。</p>
+
+        <blockquote><p>核心经验：<strong>判题的本质不是「跑代码」，而是「在可信的边界内跑不可信的代码」</strong>。把评测拆成独立微服务，是为了让安全和资源问题被集中处理一次；Docker 的 CPU、内存、网络、只读根文件系统则是这道边界的具体落地。永远假设用户的代码会搞破坏，然后让任何破坏都被关在一个跑完即删的容器里。</p></blockquote>
+      </div>
+    </article>
+    <script src="/assets/js/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI 游戏工程的在线构建、发布与权限设计 · sanmua</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <script src="/assets/js/theme.js"></script>
+    <link rel="stylesheet" href="/assets/css/main.css" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+  </head>
+  <body>
+    <article class="prose">
+      <header class="prose__header">
+        <a class="prose__back" href="/">&larr; 返回首页</a>
+        <h1 class="prose__title">AI 游戏工程的在线构建、发布与权限设计</h1>
+        <div class="prose__meta"><span>2026-10-04</span><span>Go</span><span>架构</span><span>编程</span></div>
+      </header>
+
+      <div class="article-body">
+        <p>除了面向 C 端的 App，我还参与了 Lunetale 的 B 端管理后台 OpenGame：AI 游戏工程生成、在线构建与发布、模型中心、订单积分、数据看板都在这一侧。后台一多，最先头疼的就是权限——谁能看哪个菜单、谁能点哪个构建按钮，不能靠前端藏按钮糊弄。这篇讲我怎么用 JWT 加 Casbin 把权限粒度做到菜单和接口，以及在线构建这条链路是怎么跑的。</p>
+
+        <h2>在线构建：先把它想成一个状态机</h2>
+        <p>用户在后台点「构建发布」，后端生成一个构建任务，丢给 worker 异步跑。构建是慢操作（拉模板、装依赖、打包、传 CDN），绝不能让请求同步等。任务用状态机管起来，非法跳转直接拒绝——比如构建中不能跳回待构建：</p>
+        <pre><code>const (
+    BuildPending = "pending"
+    BuildRunning = "running"
+    BuildSuccess = "success"
+    BuildFailed  = "failed"
+)
+
+type BuildTask struct {
+    ID        uint
+    ProjectID uint
+    Status    string
+    Log       string
+}
+
+func (t *BuildTask) Transit(next string) error {
+    allowed := map[string][]string{
+        BuildPending: {BuildRunning, BuildFailed},
+        BuildRunning:  {BuildSuccess, BuildFailed},
+    }
+    for _, s := range allowed[t.Status] {
+        if s == next {
+            t.Status = next
+            return nil
+        }
+    }
+    return errIllegalTransition
+}</code></pre>
+        <p>前端轮询任务状态或走 WebSocket 收进度，日志追加进 <code>Log</code>，失败时原样展示，方便定位是模板问题还是依赖问题。</p>
+
+        <h2>工程生成：模板加参数，不现场写代码</h2>
+        <p>新建工程不是从零生成，而是套预置模板再填参数：项目名、用到的模型、主题色、入口场景。后端把模板拷一份、替换占位符，就成了一个可构建的工程目录。这样工程结构统一，构建脚本不用每个项目单独适配。</p>
+
+        <h2>模型中心与订单积分</h2>
+        <p>模型中心统一管理接入的各家模型及其单价，构建、对话消耗都按这里的计价走。订单和积分是一条线：用户下单、支付履约（接入了微信、支付宝、Apple、Google）成功后给账户加积分，消耗时再按前面那篇讲的条件扣减。模型单价和积分扣减解耦在同一份计费口径上，不会出现「展示一个价、扣的时候另一个价」。</p>
+
+        <h2>JWT 鉴权：先认出你是谁</h2>
+        <p>后台登录后发 JWT，中间件统一校验、把用户 ID 和角色塞进上下文。这一层只管「身份」，不管「能干嘛」——后者交给 Casbin：</p>
+        <pre><code>func AuthRequired() gin.HandlerFunc {
+    return func(c *gin.Context) {
+        token := c.GetHeader("Authorization")
+        claims, err := jwt.Parse(token)
+        if err != nil {
+            c.AbortWithStatusJSON(401, gin.H{"error": "unauthorized"})
+            return
+        }
+        c.Set("userID", claims.UserID)
+        c.Set("roles", claims.Roles)
+        c.Next()
+    }
+}</code></pre>
+
+        <h2>Casbin 的 RBAC：权限粒度到菜单和接口</h2>
+        <p>身份认出来后，每个接口再挂一个权限校验中间件。Casbin 的模型是标准的 <code>sub, obj, act</code>：角色（sub）能对哪个资源（obj）做什么动作（act）。obj 既能对应后端接口路径，也能对应前端菜单的资源标识——<strong>菜单和接口用同一份策略</strong>，前端按它渲染可见菜单，后端按它放行请求，两边不会对不上：</p>
+        <pre><code>func RequirePermission(obj, act string) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        sub := c.GetString("roles")
+        ok, err := enforcer.Enforce(sub, obj, act)
+        if err != nil || !ok {
+            c.AbortWithStatusJSON(403, gin.H{"error": "forbidden"})
+            return
+        }
+        c.Next()
+    }
+}
+
+// 后台配置权限时，把策略落进 Casbin 规则表
+enforcer.AddPolicy("editor", "/api/projects", "READ")
+enforcer.AddPolicy("admin", "/api/build", "*")</code></pre>
+        <p>这样运营加一个角色，只是往策略表加几行，不用改代码也不用发版。</p>
+
+        <h2>数据看板：只读聚合，别压业务库</h2>
+        <p>看板要看的是用户数、对话量、构建成功数这类聚合指标。这类查询直接打在业务 PostgreSQL 上会拖慢线上写请求，所以统计走预聚合：定时把明细汇总成看板用的小表，后台查的是聚合结果，而不是现场扫全量。</p>
+
+        <h2>被生产环境教出来的细节</h2>
+        <ul>
+          <li>权限千万别只靠前端藏菜单——懂点网络的人直接调接口就能绕过，后端 <code>Enforce</code> 才是真防线；</li>
+          <li>构建任务要带超时和失败重试，worker 崩了任务卡在 running，得有个定时兜底把它判成 failed；</li>
+          <li>发布产物传阿里云 / 七牛云，构建机上不留大文件，磁盘才不会越跑越满。</li>
+        </ul>
+
+        <blockquote><p>核心经验：<strong>JWT 负责「你是谁」，Casbin 负责「你能做什么」，菜单和接口共用一份策略</strong>。在线构建本质是个异步状态机，慢操作一律任务化、别同步等；权限要落到后端接口，前端显示只是顺带。B 端后台做到这个粒度，加角色、开菜单才是配置问题，而不是开发任务。</p></blockquote>
+      </div>
+    </article>
+    <script src="/assets/js/main.js"></script>
+  </body>
+</html>

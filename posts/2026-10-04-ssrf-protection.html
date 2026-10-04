@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>自研 SSRF 防护层：把 URL 抓取关进笼子 · sanmua</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <script src="/assets/js/theme.js"></script>
+    <link rel="stylesheet" href="/assets/css/main.css" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+  </head>
+  <body>
+    <article class="prose">
+      <header class="prose__header">
+        <a class="prose__back" href="/">&larr; 返回首页</a>
+        <h1 class="prose__title">自研 SSRF 防护层：把 URL 抓取关进笼子</h1>
+        <div class="prose__meta"><span>2026-10-04</span><span>Python</span><span>安全</span><span>编程</span></div>
+      </header>
+
+      <div class="article-body">
+        <p>采集器天生就是 SSRF 的重灾区：我们要抓的 URL 一部分来自配置，一部分来自页面里爬出来的链接，等于让程序去访问"别人给的、不完全可信"的地址。如果不做防护，一个被污染的链接就能让我这台服务器去请求 <code>127.0.0.1</code>、内网服务，甚至云厂商的元数据接口。我没有直接套现成库，而是自己写了一层校验，把 URL 抓取一层层关进笼子。这篇讲这几道闸分别挡什么。</p>
+
+        <h2>第一关：协议白名单，非 http/https 一律拒</h2>
+        <p>SSRF 最经典的入口就是协议。<code>file:///etc/passwd</code>、<code>gopher://</code>、<code>dict://</code> 这些根本不该出现在一次网页抓取里。所以拿到 URL 第一件事是解析它，只放行 <code>http</code> 和 <code>https</code>：</p>
+        <pre><code>from urllib.parse import urlparse
+
+def safe_url(raw: str) -&gt; str:
+    u = urlparse(raw)
+    if u.scheme not in ("http", "https"):
+        raise ValueError(f"非法协议: {u.scheme}")
+    if not u.hostname:
+        raise ValueError("缺少主机名")
+    return raw</code></pre>
+        <p>别小看这一关，它直接挡掉了用 <code>file://</code> 读本地文件、用 <code>gopher://</code> 打内网端口的一大类玩法。</p>
+
+        <h2>第二关：解析出 IP，内网/环回/保留地址全拉黑</h2>
+        <p>协议合法不代表地址安全。<code>http://127.0.0.1:6379</code>、<code>http://192.168.x.x</code> 都是合法的 http，但指向的是本机和内网。我用标准库 <code>ipaddress</code> 把域名解析成 IP 后，逐个判断它是不是环回、私网、链路本地或保留地址：</p>
+        <pre><code>import ipaddress, socket
+
+def is_public_ip(ip_str: str) -&gt; bool:
+    ip = ipaddress.ip_address(ip_str)
+    return not (
+        ip.is_private        # 10/8、172.16/12、192.168/16 等私网
+        or ip.is_loopback    # 127.0.0.0/8、::1
+        or ip.is_link_local  # 169.254.0.0/16
+        or ip.is_multicast
+        or ip.is_reserved
+    )
+
+def resolve_all(hostname: str):
+    infos = socket.getaddrinfo(hostname, None)
+    return {info[4][0] for info in infos}   # 一个域名可能解析出多个 IP</code></pre>
+        <p>注意我取的是<strong>全部</strong>解析结果，不是只拿第一个——攻击者可能让域名同时解析出一个公网 IP 和一个内网 IP，只校验第一个就被绕过了。只要任意一个 IP 落在危险段，整个请求直接拒掉。</p>
+
+        <h2>第三关：防 DNS rebinding——校验完 IP 就锁死它</h2>
+        <p>这里有个非常隐蔽的坑，叫 DNS rebinding。你校验的时候域名解析成公网 IP，放行；可等真正发起连接时，DNS 又被解析成了内网 IP——两次解析结果不一样，校验形同虚设。堵法是：<strong>校验通过后，直接拿那个已经验证过的 IP 去连，同时把原始域名放进 Host 头</strong>，让服务器仍能正确路由，而不是再给它一次重新解析的机会：</p>
+        <pre><code>def guarded_get(url: str):
+    u = urlparse(safe_url(url))
+    ips = [ip for ip in resolve_all(u.hostname) if is_public_ip(ip)]
+    if not ips:
+        raise ValueError("解析结果全部落在内网/保留段")
+    locked_ip = ips[0]                    # 锁定这个已校验的 IP
+    conn = http.client.HTTPConnection(locked_ip, timeout=5)
+    conn.request("GET", u.path or "/", headers={"Host": u.hostname})
+    # 后续连接都打在 locked_ip 上，不再二次 DNS 解析</code></pre>
+        <p>核心就一句：<strong>校验用的 IP 和实际连接的 IP 必须是同一个</strong>，中间不给 DNS 任何"变脸"的机会。</p>
+
+        <h2>第四关：重定向的每个 Location 都要重新过闸</h2>
+        <p>很多人只校验了最初那个 URL，却忘了跟随重定向。攻击者完全可以让一个合法公网 URL 返回 302，跳到 <code>http://169.254.169.254</code>。所以我的策略是：<strong>每一跳重定向都把新的 <code>Location</code> 当成一个全新 URL，从头跑一遍上面所有校验</strong>，而不是"第一个 URL 安全，后面一路绿灯"。</p>
+        <ul>
+          <li>不使用客户端库默认的自动重定向，改为自己读 <code>3xx</code> 响应、手动处理 <code>Location</code>；</li>
+          <li>对每个 <code>Location</code> 重新做协议白名单 + IP 校验 + 锁定 IP；</li>
+          <li>同时限制重定向跳数（比如最多 5 跳），防止被无限重定向拖死。</li>
+        </ul>
+
+        <h2>别漏了云元数据地址 169.254.169.254</h2>
+        <p>这是最该单独拎出来说的一个地址。云上实例的元数据接口固定监听在 <code>169.254.169.254</code>，它属于链路本地段，上面的 <code>is_link_local</code> 判断理论上已经能挡住。但我还是把它列成一条<strong>显式黑名单</strong>，单独再拦一次——因为它是 SSRF 打穿云主机、窃取临时凭证的头号目标。宁可重复拦，也不能因为哪天 <code>ipaddress</code> 的判定口径变了而漏过去。</p>
+
+        <h2>最后一道闸：超时与端口限制</h2>
+        <p>校验都过了，还要在传输层兜底。我对所有抓取请求统一设了连接与读取超时，避免一个慢请求把协程挂死；同时只允许访问标准的 <code>80/443</code> 端口，<strong>不允许打 22、6379、3306 这类内网服务端口</strong>。这样即便前面某层校验被绕过，攻击者也很难借我的服务器去探测内网的具体服务。</p>
+        <table>
+          <thead><tr><th>攻击手法</th><th>靠哪一层挡</th></tr></thead>
+          <tbody>
+            <tr><td><code>file://</code> / <code>gopher://</code> 等协议</td><td>协议白名单，只放 http/https</td></tr>
+            <tr><td>直接写内网 / 环回 IP</td><td>解析 IP 后用 <code>ipaddress</code> 拉黑私网段</td></tr>
+            <tr><td>DNS rebinding 二次变脸</td><td>校验后锁定 IP 直连，不再二次解析</td></tr>
+            <tr><td>302 跳转到内网</td><td>每个 <code>Location</code> 重新校验 + 限跳数</td></tr>
+            <tr><td>打云元数据 / 内网端口</td><td>显式黑名单 + 端口白名单 + 超时</td></tr>
+          </tbody>
+        </table>
+
+        <blockquote><p>核心经验：<strong>SSRF 防护没有"一次校验就万事大吉"，它是一串必须层层独立成立的闸门</strong>。协议、IP 归属、DNS 一致性、每一跳重定向、元数据地址、超时端口——任何一层偷懒，前面所有努力都白费。把 URL 抓取关进笼子的意思，就是让它无论如何都跑不出你画好的那个公网白名单。</p></blockquote>
+      </div>
+    </article>
+    <script src="/assets/js/main.js"></script>
+  </body>
+</html>

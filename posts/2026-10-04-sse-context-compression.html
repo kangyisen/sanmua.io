@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LLM 长会话实战：SSE 流式生成、上下文压缩与成本控制 · sanmua</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <script src="/assets/js/theme.js"></script>
+    <link rel="stylesheet" href="/assets/css/main.css" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+  </head>
+  <body>
+    <article class="prose">
+      <header class="prose__header">
+        <a class="prose__back" href="/">&larr; 返回首页</a>
+        <h1 class="prose__title">LLM 长会话实战：SSE 流式生成、上下文压缩与成本控制</h1>
+        <div class="prose__meta"><span>2026-10-04</span><span>Go</span><span>AI</span><span>编程</span></div>
+      </header>
+
+      <div class="article-body">
+        <p>Genesis 叙事引擎接入 Gemini 和 OpenAI 之后，最先暴露的不是效果，而是两件很现实的事：生成要逐字返回才有「AI 在说话」的体验，以及会话一拉长，发给模型的 token 像滚雪球一样涨。Lunetale 是面向海外的付费产品，token 就是真金白银。这篇讲我怎么用 Gin 接出 SSE 流，又怎么靠裁剪加摘要把长会话的上下文和成本控住。</p>
+
+        <h2>为什么生成用 SSE，而不是 WebSocket</h2>
+        <p>生成是一个单向流：服务端往外吐 token，客户端只负责渲染。这种场景 WebSocket 是杀鸡用牛刀——要管握手、心跳、双向帧协议。SSE 天生就是「服务端单向推送」，基于 HTTP，浏览器原生 <code>EventSource</code> 就能接，断了还能自动重连。真正需要双向的场景（房间广播、语音指令）才走 WebSocket，后面那篇多智能体再展开。</p>
+
+        <h2>Gin 里的 SSE：c.Stream 与手动 Flush</h2>
+        <p>核心是三件事：设对响应头、用 <code>c.Stream</code> 跑循环、每吐一个片段就 <code>c.Writer.Flush()</code> 把缓冲区刷出去。不 Flush，Nginx 和 Gin 的缓冲会把整段回复攒到结束才发出去，流式就名存实亡了：</p>
+        <pre><code>func StreamCompletion(c *gin.Context, req ChatRequest) {
+    c.Writer.Header().Set("Content-Type", "text/event-stream")
+    c.Writer.Header().Set("Cache-Control", "no-cache")
+    c.Writer.Header().Set("Connection", "keep-alive")
+
+    stream, err := llm.ChatStream(c.Request.Context(), req.Messages)
+    if err != nil {
+        c.SSEvent("error", gin.H{"message": err.Error()})
+        return
+    }
+
+    c.Stream(func(w io.Writer) bool {
+        select {
+        case &lt;-c.Request.Context().Done(): // 客户端断开
+            return false
+        case chunk, ok := &lt;-stream:
+            if !ok {
+                c.SSEvent("done", nil)
+                return false
+            }
+            c.SSEvent("delta", gin.H{"text": chunk})
+            c.Writer.Flush()
+            return true
+        }
+    })
+}</code></pre>
+        <p>请求上下文一断（用户关页面、网络超时），<code>c.Request.Context().Done()</code> 立刻让循环退出，底层对模型的请求也跟着取消，不白烧 token。</p>
+
+        <h2>长会话的上下文是怎么涨起来的</h2>
+        <p>每次请求都要把「系统提示 + 全部历史 + 本轮提问」整包发给模型。聊到第三十轮，历史消息可能已经上百条，系统提示还固定带了一大段世界观和人设。两条路必须同时走：<strong>裁剪</strong>（只保留最近几轮原样）和<strong>压缩</strong>（把更早的历史摘要成一段）。</p>
+
+        <h2>裁剪：系统提示加最近 N 轮原样保留</h2>
+        <p>做法很朴素：系统提示永远在最前，再原样保留最近 N 轮对话，更早的消息不进上下文。这样最近的剧情细节不会丢，prompt 长度也有上界：</p>
+        <pre><code>func BuildMessages(system string, recent []Message, summary string) []llm.Message {
+    msgs := []llm.Message{{Role: "system", Content: system}}
+    if summary != "" {
+        msgs = append(msgs, llm.Message{
+            Role: "system", Content: "历史摘要：" + summary,
+        })
+    }
+    // 只保留最近 N 轮，更早的交给摘要压缩
+    const keep = 20
+    if len(recent) &gt; keep {
+        recent = recent[len(recent)-keep:]
+    }
+    for _, m := range recent {
+        msgs = append(msgs, llm.Message{Role: m.Role, Content: m.Content})
+    }
+    return msgs
+}</code></pre>
+
+        <h2>压缩：把更早的历史摘要成一段</h2>
+        <p>被裁掉的历史不能直接丢，否则玩家聊过的设定 NPC 会「失忆」。我们在后台另起一次便宜的调用，把那段老对话压成一段第三人称摘要，下次拼进系统提示。摘要本身也会随时间再被压缩，而不是无限叠加：</p>
+        <pre><code>summarizeReq := llm.Message{
+    Role: "user",
+    Content: "把下面的对话压成不超过 200 字的第三人称摘要，保留关键设定与玩家选择：\n" + olderText,
+}
+summary, err := llm.ChatOnce(ctx, summarizeReq) // 用便宜模型做摘要</code></pre>
+
+        <h2>成本控制：模型分层与 token 封顶</h2>
+        <p>成本不是靠用户自觉，是靠默认值卡住。每个会话都带一份可配置的参数，贵的模型只在需要高质量主剧情时用，摘要、翻译这类杂活全走便宜模型：</p>
+        <pre><code>type SessionConfig struct {
+    Model      string // 主模型，如 Gemini / GPT
+    Summarizer string // 摘要用的便宜模型
+    MaxTokens  int    // 单次输出封顶，防止模型收不住
+    MaxHistory int    // 原样保留的轮数
+}</code></pre>
+        <p><code>MaxTokens</code> 是底线保护：哪怕模型异常狂吐，也到数就停，单次请求成本有硬上界。</p>
+
+        <h2>被生产环境教出来的细节</h2>
+        <ul>
+          <li>Nginx 一定要关 <code>proxy_buffering</code>，否则反代把流攒住，前端看到的是「卡半天一次性出来」；</li>
+          <li>隔几秒发一个注释帧当心跳，避免中间代理把长时间没数据的连接当成死连接掐掉；</li>
+          <li>压缩是异步做的，别卡在用户这一次请求里——先把本轮回复发出去，摘要后台慢慢算。</li>
+        </ul>
+
+        <blockquote><p>核心经验：<strong>流式解决「体验」，裁剪加摘要解决「记忆与成本」</strong>。SSE 让生成逐字可见，上下文靠「系统提示 + 最近 N 轮 + 历史摘要」三段式收敛，token 成本就从无界变成了可控。长会话要做到上下文与成本都可控，本质是在「不失忆」和「不烧钱」之间找那个默认值。</p></blockquote>
+      </div>
+    </article>
+    <script src="/assets/js/main.js"></script>
+  </body>
+</html>

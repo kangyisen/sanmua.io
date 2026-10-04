@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LLM Agent 自动出题：题面样例生成与向量查重 · sanmua</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <script src="/assets/js/theme.js"></script>
+    <link rel="stylesheet" href="/assets/css/main.css" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+  </head>
+  <body>
+    <article class="prose">
+      <header class="prose__header">
+        <a class="prose__back" href="/">&larr; 返回首页</a>
+        <h1 class="prose__title">LLM Agent 自动出题：题面样例生成与向量查重</h1>
+        <div class="prose__meta"><span>2026-10-04</span><span>Python</span><span>AI</span><span>编程</span></div>
+      </header>
+
+      <div class="article-body">
+        <p>OJ 的题目库靠人工攒，攒到一定阶段就会遇到两个尴尬：某个知识点覆盖不到、难度梯度断档。让 LLM 来出题听起来很美，但直接把「给我出道题」丢给它，回来的往往是一段散文——没有结构化的输入输出样例、没有边界数据、还可能和题库里已有的题撞车。这篇讲我在项目里怎么把出题变成一个可控的 Agent 流程：先约束它产出结构化数据，再让样例自洽，最后用向量查重挡住撞题。</p>
+
+        <h2>输入只有知识点和难度，产出必须结构化</h2>
+        <p>出题 Agent 的输入很简单：一个知识点（比如「滑动窗口」）加一个难度（简单/中等/困难）。问题在于，自然语言题面没法直接进题库——评测需要的是<strong>可机读的样例和测试数据</strong>。所以我不让模型自由发挥，而是用 Function Call / JSON schema 把输出钉死成固定结构：</p>
+        <pre><code>tools = [{
+    "type": "function",
+    "function": {
+        "name": "save_problem",
+        "description": "把生成好的题目结构写入题库",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "description": {"type": "string"},
+                "samples": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "input": {"type": "string"},
+                            "output": {"type": "string"}
+                        }
+                    }
+                },
+                "edge_cases": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                }
+            },
+            "required": ["title", "description", "samples"]
+        }
+    }
+}]</code></pre>
+        <p>这样模型不是「写作文」，而是被迫填一张表：题面、几组输入输出样例、以及它自己想到的边界数据（空输入、最大值、极端长度）。后续解析入库就稳了，不会出现要靠正则去抠样例的情况。</p>
+
+        <h2>一次受约束的生成调用</h2>
+        <p>Prompt 里把知识点、难度、和「必须调用 save_problem」的要求讲清楚，然后走 chat.completions：</p>
+        <pre><code>resp = client.chat.completions.create(
+    model="deepseek-chat",
+    messages=[
+        {"role": "system", "content": "你是 OJ 出题专家，按知识点与难度出题，必须调用 save_problem 输出结构化结果。"},
+        {"role": "user", "content": "知识点：滑动窗口；难度：中等；要求：样例要能体现窗口收缩过程。"},
+    ],
+    tools=tools,
+    tool_choice={"type": "function", "function": {"name": "save_problem"}},
+)
+args = json.loads(resp.choices[0].message.tool_calls[0].function.arguments)
+# args 里就是 title / description / samples / edge_cases</code></pre>
+        <p><code>tool_choice</code> 强制它走函数调用，避免它偷懒在正文里写一堆废话再附一段 JSON。多模型（OpenAI / Gemini / DeepSeek）接口风格略有差异，我在这层做了统一封装，切换底层模型时出题逻辑不动。</p>
+
+        <h2>样例先跑一遍，校验自洽再入库</h2>
+        <p>模型会一本正经地给出「输入 1 2 3、输出 6」，但它并不真的会算。如果直接把样例当标准答案入库，评测时就会拿错的答案去判正确代码。所以我加了一步<strong>自校验</strong>：拿一份参考解（可以是我写的朴素解法，或让模型再产出一份解题思路对应的代码）跑一遍它自己生成的样例，对得上才信任这组数据：</p>
+        <pre><code>def verify_samples(samples, reference_runner):
+    for s in samples:
+        real = reference_runner(s["input"])
+        if str(real).strip() != s["output"].strip():
+            return False   # 样例自相矛盾，丢弃重生
+    return True</code></pre>
+        <p>这一步是「被生产环境教出来的细节」：不校验就入库，迟早会遇到一道题把所有正确提交都判成 WA。校验不过就让 Agent 重新生成，而不是人工去猜它哪里算错了。</p>
+
+        <h2>向量查重：新题和老题像不像</h2>
+        <p>题库大了之后，最隐蔽的问题是撞题——新出的「最长无重复子串变体」其实就是三个月前那道换了层皮。靠人读题面比对不现实，于是把题面向量化。新题生成后，把它的题面文本做一次向量嵌入，和题库里既有题的向量比对 cosine 相似度：</p>
+        <pre><code>import numpy as np
+
+def embed(text):
+    r = client.embeddings.create(model="text-embedding-3-small", input=text)
+    return np.array(r.data[0].embedding)
+
+def cosine(a, b):
+    return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))</code></pre>
+        <p>新题向量和题库每道老题向量各算一次相似度，取最大值：</p>
+        <pre><code>def is_duplicate(new_problem, existing_vectors, threshold=0.9):
+    new_vec = embed(new_problem["description"])
+    best = max(cosine(new_vec, old_vec) for old_vec in existing_vectors)
+    if best &gt;= threshold:
+        return True, best     # 太像了，判为疑似撞题
+    return False, best</code></pre>
+        <p>阈值（示例取 0.9）是个需要调的旋钮：太高会放过撞题，太低会误伤同一知识点的正常变体。我没有追求一个「查重准确率」的漂亮数字，而是把过阈值的题<strong>降级为待人工复核</strong>，而不是直接丢进正式题库——宁可让人多看一眼，也别让撞题上线。</p>
+
+        <h2>整个出题 Agent 的闭环</h2>
+        <p>把上面串起来，就是一条自动出题流水线：</p>
+        <ul>
+          <li>输入知识点 + 难度，Function Call 约束产出结构化题面 / 样例 / 边界数据；</li>
+          <li>用参考解跑一遍样例，自洽校验，不过则重生；</li>
+          <li>题面向量化，和题库做 cosine 查重，过阈值转人工复核；</li>
+          <li>通过后向量入库，题目正式可被评测。</li>
+        </ul>
+        <p>向量不是只用来查重一次——入库后它同时是将来「相似题推荐」和下次查重的比对底库，一次嵌入两处复用。</p>
+
+        <blockquote><p>核心经验：<strong>LLM 出题最大的风险不是「写得不好」，而是「看起来很对、其实是错的或重复的」</strong>。用 Function Call 把输出钉成结构化，用参考解校验样例自洽，用向量 cosine 挡住撞题——这三道关把「生成」从碰运气变成了可验收的流水线。AI 负责铺开数量，工程负责守住质量底线。</p></blockquote>
+      </div>
+    </article>
+    <script src="/assets/js/main.js"></script>
+  </body>
+</html>

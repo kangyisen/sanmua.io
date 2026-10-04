@@ -1,9 +1,130 @@
 [
   {
+    "title": "条件-效果规则引擎：AI 互动叙事的配置化设计",
+    "href": "/posts/2026-10-04-narrative-rule-engine.html",
+    "date": "2026-10-04",
+    "tags": [
+      "Go",
+      "AI",
+      "编程"
+    ],
+    "excerpt": "分支剧情、地图热点、NPC 状态与多结局，怎么用一套“条件-效果”规则引擎配置出来而不改核心代码。",
+    "isNew": true
+  },
+  {
+    "title": "LLM 长会话实战：SSE 流式生成、上下文压缩与成本控制",
+    "href": "/posts/2026-10-04-sse-context-compression.html",
+    "date": "2026-10-04",
+    "tags": [
+      "Go",
+      "AI",
+      "编程"
+    ],
+    "excerpt": "用 Gin 接出 SSE 流，长会话怎么裁剪压缩上下文、把 token 成本控住。",
+    "isNew": true
+  },
+  {
+    "title": "多智能体同场对话：双通道架构与消息原子落库",
+    "href": "/posts/2026-10-04-multi-agent-dialogue.html",
+    "date": "2026-10-04",
+    "tags": [
+      "Go",
+      "AI",
+      "编程"
+    ],
+    "excerpt": "SSE 与 WebSocket 怎么分工，多模型路由、积分扣费与消息落库如何做到不丢不重；含语音转写与多语言翻译。",
+    "isNew": true
+  },
+  {
+    "title": "AI 游戏工程的在线构建、发布与权限设计",
+    "href": "/posts/2026-10-04-online-build-publish.html",
+    "date": "2026-10-04",
+    "tags": [
+      "Go",
+      "架构",
+      "编程"
+    ],
+    "excerpt": "工程生成、在线构建发布、模型中心与数据看板，JWT+Casbin 如何把权限粒度做到菜单和接口。",
+    "isNew": true
+  },
+  {
+    "title": "asyncio 两级并发：高吞吐采集器的并发模型与热同步",
+    "href": "/posts/2026-10-04-asyncio-crawler-concurrency.html",
+    "date": "2026-10-04",
+    "tags": [
+      "Python",
+      "编程"
+    ],
+    "excerpt": "协程两级并发怎么设计，信号池限流与配置热同步如何不重启生效。",
+    "isNew": true
+  },
+  {
+    "title": "采集可靠性：outbox、崩溃恢复、优雅停机与看门狗",
+    "href": "/posts/2026-10-04-crawler-reliability.html",
+    "date": "2026-10-04",
+    "tags": [
+      "Python",
+      "编程"
+    ],
+    "excerpt": "SQLite outbox、崩溃自动恢复与优雅停机，Redis 去重与 Lua 看门狗如何重放熔断。",
+    "isNew": true
+  },
+  {
+    "title": "自研 SSRF 防护层：把 URL 抓取关进笼子",
+    "href": "/posts/2026-10-04-ssrf-protection.html",
+    "date": "2026-10-04",
+    "tags": [
+      "Python",
+      "安全",
+      "编程"
+    ],
+    "excerpt": "内网地址、DNS rebinding、重定向绕过，URL 抓取前的安全校验怎么一层层堵。",
+    "isNew": true
+  },
+  {
+    "title": "OJ 判题沙箱：FastAPI 微服务与 Docker 隔离评测",
+    "href": "/posts/2026-10-04-oj-judge-sandbox.html",
+    "date": "2026-10-04",
+    "tags": [
+      "Python",
+      "Docker",
+      "编程"
+    ],
+    "excerpt": "判题为什么解耦成微服务，Docker 容器如何限制 CPU、内存、时间与网络。",
+    "isNew": true
+  },
+  {
+    "title": "LLM Agent 自动出题：题面样例生成与向量查重",
+    "href": "/posts/2026-10-04-llm-problem-generation.html",
+    "date": "2026-10-04",
+    "tags": [
+      "Python",
+      "AI",
+      "编程"
+    ],
+    "excerpt": "Agent 按知识点与难度生成题面、样例和边界数据，向量查重怎么防止撞题。",
+    "isNew": true
+  },
+  {
+    "title": "MaxKB RAG 实战：从文档解析到溯源兜底的工作流",
+    "href": "/posts/2026-10-04-maxkb-rag-workflow.html",
+    "date": "2026-10-04",
+    "tags": [
+      "AI",
+      "RAG",
+      "编程"
+    ],
+    "excerpt": "解析、分段、向量化，编排“意图识别→检索→生成→溯源→兜底”，Agent 何时调用工具。",
+    "isNew": true
+  },
+  {
     "title": "四账户积分记账：余额、冻结、乐观锁与消费优先级",
     "href": "/posts/2026-09-25-points-system.html",
     "date": "2026-09-25",
-    "tags": ["Go", "设计"],
+    "tags": [
+      "Go",
+      "设计"
+    ],
     "excerpt": "不同生命周期的钱为什么分账户，冻结占额、全条件 UPDATE 与两阶段扣减怎么保证不超扣。",
     "isNew": true
   },
@@ -11,7 +132,10 @@
     "title": "Redis 分布式锁在订单、积分、续期、背包里的真实用法",
     "href": "/posts/2026-09-25-redis-distributed-lock.html",
     "date": "2026-09-25",
-    "tags": ["Go", "Redis"],
+    "tags": [
+      "Go",
+      "Redis"
+    ],
     "excerpt": "SetNX+UUID+Lua 解锁、LockAndWait、真实锁点，以及为什么数据库约束才是最终防线。",
     "isNew": true
   },
@@ -19,7 +143,10 @@
     "title": "多渠道支付回调与幂等履约：订单管线设计",
     "href": "/posts/2026-09-25-payment-fulfillment.html",
     "date": "2026-09-25",
-    "tags": ["Go", "支付"],
+    "tags": [
+      "Go",
+      "支付"
+    ],
     "excerpt": "微信/支付宝/Apple/Google 回调怎么验签，策略模式分发履约，以及幂等三件套。",
     "isNew": true
   },
@@ -27,7 +154,10 @@
     "title": "一个仓库拆出 C 端 App 与 B 端后台：双服务架构",
     "href": "/posts/2026-09-25-dual-service-architecture.html",
     "date": "2026-09-25",
-    "tags": ["Go", "架构"],
+    "tags": [
+      "Go",
+      "架构"
+    ],
     "excerpt": "基于 gin-vue-admin 二开，一个仓库、一个镜像、两个入口的分治实践。",
     "isNew": true
   },
@@ -35,35 +165,45 @@
     "title": "学习数据库的笔记",
     "href": "/sjk.html",
     "date": "2025-06-01",
-    "tags": ["数据库"],
+    "tags": [
+      "数据库"
+    ],
     "excerpt": "数据库学习过程中整理的知识体系与实战笔记。"
   },
   {
     "title": "我的编程学习之路",
     "href": "/docs/daer.html",
     "date": "2025-05-10",
-    "tags": ["编程"],
+    "tags": [
+      "编程"
+    ],
     "excerpt": "从入门到进阶，记录编程学习过程中的方法与心得。"
   },
   {
     "title": "我的第一篇博客文章",
     "href": "/docs/xx.html",
     "date": "2025-04-01",
-    "tags": ["随笔"],
+    "tags": [
+      "随笔"
+    ],
     "excerpt": "欢迎来到我的个人博客，在这里记录学习与成长历程。"
   },
   {
     "title": "数学专题",
     "href": "/docs/shuxue/shuxue.html",
     "date": "2025-03-15",
-    "tags": ["数学"],
+    "tags": [
+      "数学"
+    ],
     "excerpt": "系统性整理的数学知识与专题笔记。"
   },
   {
     "title": "奇思妙想",
     "href": "/qisimiaoxiang/qisimiaoxiang.html",
     "date": "2025-02-20",
-    "tags": ["杂项"],
+    "tags": [
+      "杂项"
+    ],
     "excerpt": "一些零散的想法、小实验与生活碎片。"
   }
 ]
