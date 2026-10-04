@@ -18,10 +18,10 @@
       </header>
 
       <div class="article-body">
-        <p>单智能体聊多了不够用，产品要让多个 AI 角色同场对话：用户一句下去，可能同时有好几个角色接话，还要分主次模型。这套 AI 多智能体对话系统是我在 Lunetale 上做的，要稳住三件事：SSE 和 WebSocket 怎么分工、扣费和消息落库怎么做到不丢不重，以及语音转写和多语言翻译怎么接。这篇把架构和最容易出事故的扣费环节讲清楚。</p>
+        <p>单智能体聊多了不够用，产品要让多个 AI 角色同场对话：用户一句下去，可能好几个角色接话。这套 AI 多智能体对话系统是我在 Lunetale 上做的，要稳住四件事：SSE 和 WebSocket 怎么分工、多角色编排怎么拼上下文、积分怎么扣才不发生「扣了钱却没生成」，以及消息怎么做到不丢不重。这篇把最容易出资金事故的扣费链路讲透。流式那一半的细节见<a href="/posts/2026-10-04-sse-context-compression.html">SSE 与上下文压缩</a>。</p>
 
-        <h2>双通道为什么：一条管流，一条管场</h2>
-        <p>一开始我图省事想用一条 WebSocket 通吃，做下来发现两类消息节奏完全不同。逐字生成是高频、单向、只给发起方的；角色入场、轮到谁说话是低频、要广播给全场的。硬塞一条通道，前端要靠事件类型自己分辨，流式一卡还影响房间状态。拆开反而清晰：</p>
+        <h2>双通道：一条管流，一条管场</h2>
+        <p>逐字生成是高频、单向、只给发起方的；角色入场、轮到谁说话是低频、要广播全场的。拆成两条通道反而清晰：</p>
         <table>
           <thead><tr><th></th><th>SSE 通道</th><th>WebSocket 通道</th></tr></thead>
           <tbody>
@@ -30,7 +30,6 @@
             <tr><td>受众</td><td>当前发起请求的用户</td><td>整个房间在线成员</td></tr>
           </tbody>
         </table>
-        <p>分发时按事件类型选通道：</p>
         <pre><code>func (s *Service) Push(sessionID string, event Event) {
     if event.Stream { // 逐字生成走 SSE，只推给发起方
         s.sse.PushTo(sessionID, event)
@@ -39,63 +38,108 @@
     }
 }</code></pre>
 
-        <h2>多模型路由：会话级参数决定走哪个模型</h2>
-        <p>系统里接了 Gemini / OpenAI / DeepSeek 多家模型。同一个会话带一份参数配置，主角色用贵的好模型，旁白、群杂用便宜模型。路由逻辑就一句话：会话指定了就用指定的，没指定回落默认：</p>
-        <pre><code>func (r *Router) Resolve(cfg SessionConfig) (string, error) {
-    if cfg.Model != "" { // 会话级配置优先
-        return cfg.Model, nil
+        <h2>一条消息的完整链路：冻结、生成、实扣</h2>
+        <p>早期我图省事：进请求先扣费、再生成。结果 LLM 一失败或超时，钱扣了回复没出来，用户立刻投诉。改成两阶段后整条链路是这样：</p>
+        <pre><code>用户发消息
+   |
+   | 0. 幂等查询：重放则直接返回已存消息
+   | 1. 冻结占额 freeze(user, cost, ttl=60s)
+   v
+[路由选模型] -&gt; [LLM 流式生成] --SSE delta--&gt; 用户逐字看
+   |                              |
+   | 生成成功                      | 失败 / 超时
+   v                              v
+[事务: 实扣 + 落 user + 落 ai]   [解冻返还 / outbox 补偿任务]
+   |
+   v
+提交，冻结额度真正消耗掉</code></pre>
+
+        <h2>第一步：冻结占额，不真正扣减</h2>
+        <p>冻结把额度从「可用」挪到「冻结」，用户看到的可用余额变少了，但钱还没真正花掉。用条件更新兜住余额不足：</p>
+        <pre><code>func (s *Service) Freeze(ctx context.Context, userID uint, cost int) error {
+    res := s.db.Model(&amp;Account{}).
+        Where("user_id = ? AND points - frozen &gt;= ?", userID, cost).
+        Update("frozen", gorm.Expr("frozen + ?", cost))
+    if res.RowsAffected == 0 {
+        return errInsufficientPoints
     }
-    return r.defaultModel, nil
+    // 记一笔冻结单，带 60s TTL，兜底扫描靠它回收
+    return s.db.Create(&amp;Freeze{UserID: userID, Amount: cost,
+        Status: "frozen", ExpireAt: time.Now().Add(60 * time.Second)}).Error
 }</code></pre>
 
-        <h2>扣费与落库：必须在同一个事务里</h2>
-        <p>这是最容易出资金事故的地方。一次对话要做两件事：扣用户积分、把消息写进库。如果分开做，扣了费落库失败用户会投诉，落了库扣费失败平台白送。正确做法是<strong>用一个数据库事务把两者绑死</strong>，要么都成要么都回滚。扣费还用条件更新兜住并发：余额不够就影响 0 行，直接报错，不会扣成负数：</p>
-        <pre><code>func (s *Service) SendMessage(ctx context.Context, in SendInput) (*Message, error) {
-    var msg *Message
-    err := s.db.Transaction(func(tx *gorm.DB) error {
-        // 条件扣费：余额不足则影响 0 行，视为失败
-        res := tx.Model(&Account{}).
-            Where("user_id = ? AND points - frozen &gt;= ?", in.UserID, in.Cost).
-            Update("points", gorm.Expr("points - ?", in.Cost))
-        if res.RowsAffected == 0 {
-            return errInsufficientPoints
-        }
-        // 同一事务里落消息，扣费与写库同生共死
-        m := &Message{
-            UserID:         in.UserID,
-            SessionID:      in.SessionID,
-            Role:           "user",
-            Content:        in.Content,
-            IdempotencyKey: in.IdempotencyKey,
-        }
-        if err := tx.Create(m).Error; err != nil {
+        <h2>第二步：成功后在同一事务里实扣并落库</h2>
+        <p>流式全部生成完、确认有交付了，才在一个事务里做三件事：把冻结真正转成扣减、落用户消息、落 AI 回复。要么都成要么都回滚：</p>
+        <pre><code>func (s *Service) Commit(ctx context.Context, in SendInput, aiReply string) error {
+    return s.db.Transaction(func(tx *gorm.DB) error {
+        if err := tx.Model(&amp;Account{}).Where("user_id = ?", in.UserID).
+            Updates(map[string]interface{}{
+                "points": gorm.Expr("points - ?", in.Cost),
+                "frozen": gorm.Expr("frozen - ?", in.Cost),
+            }).Error; err != nil {
             return err
         }
-        msg = m
-        return nil
+        if err := tx.Create(&amp;Message{SessionID: in.SessionID, Role: "user",
+            Content: in.Content, IdempotencyKey: in.IdempotencyKey}).Error; err != nil {
+            return err
+        }
+        return tx.Create(&amp;Message{SessionID: in.SessionID, Role: "assistant",
+            Content: aiReply, Actor: in.Model}).Error
     })
-    return msg, err
 }</code></pre>
 
-        <h2>不丢不重：幂等键加唯一索引</h2>
-        <p>网络重试、用户手抖点两次，都会让同一条消息进来两遍。我们让前端带一个幂等键，数据库对它建唯一索引——重发时 <code>Create</code> 撞唯一约束，事务回滚，再把已存在的消息原样返回。这样「不丢」靠事务提交，「不重」靠唯一索引，不依赖前端有多克制：</p>
-        <pre><code>type Message struct {
-    ID             uint
-    SessionID      string
-    IdempotencyKey string `gorm:"uniqueIndex:uk_idem"` // 重复请求在此处被拦下
+        <h2>失败补偿：解冻与兜底扫描</h2>
+        <p>生成失败或流式超时，直接解冻把额度退回去。万一进程在冻结后、解冻前崩了，冻结单会一直挂着——所以有个定时任务扫过期冻结单兜底返还：</p>
+        <pre><code>func (s *Service) Release(userID uint, cost int) error {
+    return s.db.Model(&amp;Account{}).Where("user_id = ?", userID).
+        Update("frozen", gorm.Expr("frozen - ?", cost)).Error
+}
+
+// 定时兜底：超过 TTL 仍 frozen 的单子，判失败并返还
+func (s *Service) SweepExpiredFreezes() {
+    var fs []Freeze
+    s.db.Where("status = ? AND expire_at &lt; ?", "frozen", time.Now()).Find(&amp;fs)
+    for _, f := range fs {
+        s.Release(f.UserID, f.Amount)
+        s.db.Model(&amp;f).Update("status", "released")
+    }
 }</code></pre>
 
-        <h2>语音转写与多语言翻译怎么接</h2>
-        <p>产品面向海外多语言用户，输入不只文字。语音消息先走转写得到文本，再走正常对话；需要时再把回复翻译回用户语言。这两步都是独立的、可失败的旁路，<strong>不放进上面那个扣费事务</strong>——转写或翻译失败只影响体验，绝不能反过来把已经成功的扣费一起回滚掉。它们失败时降级成「直接发原文」，保证对话链路不断。</p>
+        <h2>多智能体编排：公共上下文与私有记忆</h2>
+        <p>同场多个角色，prompt 不能每个都塞全量历史。我们把上下文分两层：世界观和公共剧情全场共享，每个角色的私人记忆只拼给它自己。下一个发言者由 director 角色或规则轮次决定：</p>
+        <pre><code>func BuildPrompt(room Room, speaker string) []llm.Message {
+    sys := "世界观：" + room.WorldView + "\n"
+    sys += "你扮演：" + room.Characters[speaker].Persona + "\n"
+    sys += "公共剧情摘要：" + room.SharedPlot + "\n"
+    sys += "你的私人记忆：" + room.Characters[speaker].PrivateMem // 只给发言者
+    msgs := []llm.Message{{Role: "system", Content: sys}}
+    for _, m := range room.Recent { // 最近对白按序可见
+        msgs = append(msgs, llm.Message{Role: m.Role, Content: m.Text})
+    }
+    return msgs
+}</code></pre>
+        <p>下一个谁说话：默认按角色列表轮转；用户 <code>@</code> 某个角色则它优先；需要自然接话时，把最近对白喂给一个裁判模型选「谁接最顺」。多角色回复按发言顺序逐条落库，<code>actor</code> 字段记是哪个模型生成的。</p>
 
-        <h2>被生产环境教出来的细节</h2>
+        <h2>幂等：重复请求直接返回已存消息</h2>
+        <p>网络重试、用户手抖，都会让同一条请求进来两遍。带幂等键先查库，命中就直接返回，绝不再走生成：</p>
+        <pre><code>func (s *Service) ReplayOrCreate(in SendInput) (*Message, bool, error) {
+    var exist Message
+    err := s.db.Where("idempotency_key = ?", in.IdempotencyKey).First(&amp;exist).Error
+    if err == nil {
+        return &amp;exist, true, nil // 重复请求：返回已存消息，不再扣费生成
+    }
+    return nil, false, nil // 首次：继续走 冻结-&gt;生成-&gt;实扣
+}</code></pre>
+
+        <h2>备选方案：预扣 vs 后扣 vs 冻结两阶段</h2>
         <ul>
-          <li>流式事件和广播事件务必分通道，混在一起会让前端在逐字更新时还要处理房间状态，bug 特别难查；</li>
-          <li>扣费金额随模型走，换模型前先把单次成本算清，别用便宜模型的余额去预期贵模型的消耗；</li>
-          <li>转写、翻译这种旁路服务超时要短、重试要少，拖慢的是用户这一次对话的体感。</li>
+          <li><strong>先扣后生成</strong>：实现最简单，但 LLM 失败就是净亏损，用户投诉；</li>
+          <li><strong>先生成后扣</strong>：体验最好，但用户可以故意断连逃单，平台坏账；</li>
+          <li><strong>冻结两阶段</strong>：先冻后扣、失败解冻、定时兜底，资金安全和体验折中，我们选它。</li>
         </ul>
+        <p>冻结 TTL 设 60 秒：覆盖一次流式生成的正常时长，又不至于让崩溃后冻结额度被占太久。相关的队列兜底与支付履约，可参见<a href="/posts/2026-09-25-redis-distributed-lock.html">分布式锁</a>与<a href="/posts/2026-09-25-payment-fulfillment.html">支付履约</a>两篇。</p>
 
-        <blockquote><p>核心经验：<strong>双通道让「流式」和「房间」各走各的路，事务加唯一索引让扣费和落库同生共死</strong>。多智能体系统要稳，关键不是模型多强，而是钱和消息这两条线——扣费与写库一个事务保证强一致，幂等键加唯一索引保证不丢不重，旁路的转写翻译宁可降级也不拖垮主链路。</p></blockquote>
+        <blockquote><p>核心经验：<strong>双通道让流式与房间各走各的路，冻结两阶段让「扣钱」和「交付」对齐</strong>。多智能体要稳，关键不是模型多强，而是钱和消息这两条线——先冻结、成功才实扣、失败解冻加定时兜底，幂等键保证重复请求只返回不重复生成；旁路的语音转写与翻译宁可降级也不拖垮主链路。</p></blockquote>
       </div>
     </article>
     <script src="/assets/js/main.js"></script>

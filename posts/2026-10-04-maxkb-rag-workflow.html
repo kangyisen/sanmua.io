@@ -18,80 +18,128 @@
       </header>
 
       <div class="article-body">
-        <p>企业里搭问答系统，最朴素的想法是把文档一股脑塞进上下文让大模型答。很快就会撞墙：文档太长塞不下、答得没出处、问不到私有知识时它还硬编。这个企业知识库智能问答项目我基于 MaxKB 搭 RAG，把流程拆成「离线准备」和「在线问答」两半，再用工作流把「意图识别 → 检索 → 生成 → 溯源 → 兜底」串起来。这篇按节点讲清楚每一步在干什么、Agent 什么时候该去调工具。</p>
+        <p>企业里搭问答系统，最朴素的想法是把文档一股脑塞进上下文让大模型答，很快就撞墙：太长塞不下、答得没出处、问不到私有知识时它还硬编。这个企业知识库智能问答项目我基于 MaxKB 搭 RAG，拆成「离线准备」和「在线问答」两半，用工作流把「意图识别 → 检索 → 生成 → 溯源 → 兜底」串起来。这篇按节点讲清楚每步干什么、Agent 何时该去调工具。多步 Agent 编排另见<a href="/posts/2026-10-04-multi-agent-dialogue.html">多智能体对话</a>。</p>
 
-        <h2>离线侧：解析、分段、向量化</h2>
-        <p>RAG 的效果上限在入库时就定了大半。离线这条管线分三步：先把 PDF / Word / Markdown 等不同格式解析成纯文本，再分段，最后向量化入库。分段策略不是切得越碎越好：</p>
-        <ul>
-          <li><strong>按结构切</strong>：优先顺着标题、段落、列表边界切，别把一个表格拦腰切断；</li>
-          <li><strong>控制长度</strong>：单块太长召回不准，太短上下文不完整；</li>
-          <li><strong>留重叠</strong>：相邻块保留一小段重叠，避免关键句正好落在切点上被割裂。</li>
-        </ul>
-        <pre><code>def split_text(text, chunk_size=500, overlap=80):
+        <h2>整条在线工作流</h2>
+        <pre><code>用户提问
+   |
+   v
+ [意图识别] --+-- 闲聊/通用 --&gt; 直接生成
+              +-- 需私有知识 --&gt; [检索] 向量+BM25 -&gt; rerank
+              +-- 需实时/结构化数据 --&gt; [Agent 工具节点]
+   |                                   |
+   v                                   v
+ [检索为空/低置信] --&gt; [兜底] 转人工/明说不知道
+   |
+   v
+ [生成] 仅依据上下文，带引用
+   |
+   v
+ [溯源] 返回出处片段 + 文档定位</code></pre>
+
+        <h2>离线侧：先按结构切，定长滑窗只做兜底</h2>
+        <p>分段策略上我修正了一个常见误区：不是一上来就按固定字符数硬切。正确顺序是<strong>先按标题/段落边界切，只有当某段本身超长时，才在这段内部用滑窗兜底</strong>。硬切会把一个表格或一个完整论证拦腰切断：</p>
+        <pre><code>import re
+
+def split_structured(text, max_len=500, overlap=80):
+    # 1. 先按标题/段落边界切成结构块
+    blocks = re.split(r"\n(?=#{1,6}\s)", text)   # 按 Markdown 标题切
     chunks = []
-    start = 0
-    while start &lt; len(text):
-        end = start + chunk_size
-        chunks.append(text[start:end])
-        start = end - overlap   # 回退 overlap，形成相邻重叠
+    for b in blocks:
+        b = b.strip()
+        if not b:
+            continue
+        # 2. 短块直接保留；超长块才滑窗兜底
+        if len(b) &lt;= max_len:
+            chunks.append(b)
+        else:
+            start = 0
+            while start &lt; len(b):
+                end = start + max_len
+                chunks.append(b[start:end])
+                start = end - overlap     # 相邻重叠，防关键句落在切点
     return chunks</code></pre>
-        <p>每一段连同它来自哪个文档、第几节这些元信息一起向量化存进向量库。<strong>元信息很关键</strong>——后面溯源全靠它把答案指回原文位置。</p>
+        <p>默认 <code>max_len=500</code>、<code>overlap=80</code>（字符，示例值）。每块连同文档名、章节路径、原文偏移区间一起向量化入库——<strong>这些定位元信息是后面溯源能落地的前提</strong>。</p>
 
         <h2>在线侧：先做意图识别，别急着检索</h2>
-        <p>不是每个问题都需要翻知识库。「你好」「帮我写个周报」这类闲聊或通用任务，去检索反而是噪声。所以工作流第一个节点是意图识别：判断这句话到底是要查私有知识，还是可以直接答，或者该走外部工具。MaxKB 里这是一个分类节点，背后也是调一次模型打标签：</p>
+        <p>不是每个问题都要翻知识库。「你好」「帮我写个周报」这类闲聊去检索只会引入噪声。第一个节点就是分流：</p>
         <pre><code>def classify_intent(question):
-    # 返回：retrieval / chat / tool
-    if looks_like_factual_about_internal(question):
-        return "retrieval"
+    if looks_like_internal_factual(question):
+        return "retrieval"      # 查私有知识
     if needs_realtime_or_structured(question):
-        return "tool"
-    return "chat"</code></pre>
-        <p>这一步分流决定了后面走哪条支路：闲聊直接生成、知识问题走检索、需要实时或结构化数据的走工具节点。省掉无谓检索，也避免把闲聊硬凑上一段文档。</p>
+        return "tool"          # 走工具节点
+    return "chat"              # 直接生成</code></pre>
+        <p>分流决定后面走哪条支路：闲聊直接生成、知识问题走检索、需要实时或结构化数据的走工具。</p>
 
-        <h2>检索：召回之后再重排</h2>
-        <p>被判定为知识问题后，把问题向量化去向量库召回 Top-K 相关块。光靠向量相似度还不够——语义近但不是最相关的块容易混进来，所以在召回之上再加一层重排，把真正贴题的几块顶到前面。拼进生成上下文时，我把命中的原文片段连同来源标题一起带上：</p>
-        <pre><code>def build_context(retrieved_chunks):
-    parts = []
-    for ch in retrieved_chunks:
-        # 每块都标注出处，供后面溯源使用
-        parts.append(f"[来源: {ch.doc_title} {ch.section}]\n{ch.text}")
-    return "\n\n".join(parts)</code></pre>
-        <p>上下文里保留出处标记，是「溯源」能落地的前提——生成阶段让模型只依据这段上下文答，就注定它说的每句话都能指回某块原文。</p>
+        <h2>检索：向量 + BM25 混合召回，再 rerank</h2>
+        <p>纯向量检索对「语义近但词面不搭」有效，却容易漏掉精确的专有名词、编号；纯 BM25（关键词）相反。所以我做<strong>混合召回</strong>：向量和 BM25 各召一批（示例 topK=5），合并后用 rerank 模型重排，取最贴题的几块：</p>
+        <pre><code>def hybrid_retrieve(question, top_k=5):
+    vec_hits = vector_search(question, top_k)     # 语义召回
+    bm25_hits = bm25_search(question, top_k)      # 关键词召回
+    merged = dedup(vec_hits + bm25_hits)
+    reranked = rerank_model.rerank(question, merged)
+    return reranked[:top_k]                       # 重排后取前 top_k</code></pre>
+        <p>拼进生成上下文时，每块都带上出处标记，溯源才能指回去。</p>
 
-        <h2>生成与溯源：答案必须能指回原文</h2>
-        <p>生成节点把「问题 + 带出处的上下文」交给模型，约束它只能基于给定材料回答。这样输出不是凭空生成的，而是检索材料的重组。企业场景里「能不能溯源」几乎是刚需——答得对不对先放一边，至少要让人知道这句话是从哪份文档哪一段来的。</p>
-        <p>关键是入库时就要把定位信息一起存好，别等生成完再回头找。我给每块切片都记下三样东西：文档名、所属章节、以及它在原文里的偏移区间。这样生成侧返回答案时，就能把「结论」和「它来自第几份文档、哪一节、大致哪一段」打包给前端，用户点开能直接定位到原文位置：</p>
-        <ul>
-          <li><strong>文档名</strong>：告诉用户答案出自哪份制度 / 手册；</li>
-          <li><strong>章节路径</strong>：比单给一个文件名更好定位，用户顺着目录就能找到上下文；</li>
-          <li><strong>命中片段</strong>：把最相关的那一句原文高亮返回，而不是只甩一个链接。</li>
-        </ul>
-        <p>三段信息里，章节路径和命中片段是「被生产环境教出来的细节」——早期只回文档名，用户点开还得自己翻半天找那句话，溯源就形同虚设；把命中片段直接贴出来，用户一眼就能判断答案靠不靠谱。</p>
+        <h2>生成侧 prompt：必须「有据才答，无据明说」</h2>
+        <p>生成节点最关键的是 prompt 把口径卡死——只许依据上下文答，答不出就明说，不许编：</p>
+        <pre><code>GEN_PROMPT = """
+你是企业知识助手。严格按以下规则作答：
+1. 仅依据【参考资料】回答用户问题；
+2. 若参考资料中没有相关内容，直接回复「知识库中暂未找到该内容，建议转人工咨询」，不要编造；
+3. 回答末尾用 [1][2] 标注引用了哪些资料片段。
 
-        <h2>兜底：检索为空或低置信时，别硬答</h2>
-        <p>这是「被生产环境教出来的细节」：检索回来的块要么相似度普遍很低，要么一条都没命中，这时候最危险的就是模型一本正经地编一个答案。我在工作流里加了兜底分支——先看检索质量：</p>
-        <pre><code>def should_fallback(retrieved_chunks, min_score=0.5):
-    if not retrieved_chunks:
-        return True                      # 一条都没召回到
-    if max(c.score for c in retrieved_chunks) &lt; min_score:
-        return True                      # 最相关的也不够像
+【参考资料】
+{context}
+
+【问题】{question}
+"""</code></pre>
+        <p>这样输出不是凭空生成，而是检索材料的重组，且每句都能指回某块原文。前端再把对应的文档名、章节、命中片段一起返回。</p>
+
+        <h2>兜底：低置信就别硬答</h2>
+        <p>检索回来的块要么相似度普遍很低、要么一条都没命中，这时最危险的就是模型硬编。我加了兜底分支先看检索质量：</p>
+        <pre><code>def should_fallback(hits, min_score=0.5):
+    if not hits:
+        return True                       # 一条都没召回到
+    if max(h.score for h in hits) &lt; min_score:
+        return True                       # 最相关的也不够像
     return False</code></pre>
-        <p>命中兜底时不硬生成知识型答案，而是明确回复「知识库中暂未找到相关内容」，并引导转人工或建议补充文档。<strong>承认不知道，比答错了可信得多</strong>，尤其在内部审批、制度这类场景。</p>
+        <p>命中兜底时不硬生成知识型答案，明确回复找不到并引导转人工。<strong>承认不知道，比答错了可信得多</strong>。</p>
 
-        <h2>Agent 节点：什么时候该去调工具</h2>
-        <p>纯 RAG 只回答「已经躺在文档里的静态知识」。但用户会问「我们这个月的订单量是多少」「帮我查一下某个工单状态」——这些私有知识里没有实时数据。这就是 Agent 节点接管的时机：当意图识别判断需要实时信息、或需要结构化数据时，不去检索文档，而是调用搜索 / API / 数据库工具，拿到结果再交给生成。</p>
-        <table>
-          <thead><tr><th>问题类型</th><th>走哪条路</th><th>原因</th></tr></thead>
-          <tbody>
-            <tr><td>制度、手册类静态知识</td><td>检索 + 生成 + 溯源</td><td>答案已在文档里</td></tr>
-            <tr><td>闲聊、通用写作</td><td>直接生成</td><td>无需私有知识</td></tr>
-            <tr><td>实时、结构化数据</td><td>Agent 调 API / 数据库</td><td>知识库不存动态数据</td></tr>
-            <tr><td>私有知识缺失</td><td>兜底 + 引导</td><td>宁可说不知道</td></tr>
-          </tbody>
-        </table>
-        <p>这背后的判断逻辑，本质上就是理解 Function Call / MCP 的那套思路：<strong>模型负责推理和组织语言，工具负责它自己拿不到的实时与结构化数据</strong>。最后这条问答 Agent 还接到了多渠道——网页、内部 IM 都能接入同一个工作流，后端一套编排复用。</p>
+        <h2>Agent 工具节点：私有知识之外该调什么</h2>
+        <p>纯 RAG 只答「躺在文档里的静态知识」。用户问「这个月订单量多少」「某工单状态」，这些知识库不存实时数据——这就是工具节点接管的时机。在 MaxKB 里给它配一个 Function schema，声明能调什么工具、要什么参数：</p>
+        <pre><code>tools = [{
+    "type": "function",
+    "function": {
+        "name": "query_order_status",
+        "description": "根据订单号查询实时订单状态",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "order_id": {"type": "string", "description": "订单编号"}
+            },
+            "required": ["order_id"]
+        }
+    }
+}]</code></pre>
+        <p>工具返回的结构化结果再<strong>回填进生成上下文</strong>，让模型基于「文档片段 + 工具结果」组织最终回答。这背后就是 Function Call 的思路：模型负责推理和组织语言，工具负责它自己拿不到的实时与结构化数据；这条问答 Agent 还接到网页、内部 IM 等多渠道，后端一套编排复用。</p>
 
-        <blockquote><p>核心经验：<strong>RAG 的价值不在「让大模型答得更溜」，而在「让它答得有据、且知道自己什么时候答不了」</strong>。离线把解析、分段、元信息做扎实，在线用意图识别分流、用检索+重排喂上下文、用溯源把答案钉回原文、用兜底拦住幻觉——这一整条工作流加起来，才是一个企业敢真正用起来的问答 Agent。</p></blockquote>
+        <h2>怎么评估这套 RAG 有没有变好</h2>
+        <p>不做评估的 RAG 是在裸奔。我的做法是先人工标注一批「问题 + 标准答案 + 应命中的文档」测试问答集，每次改分段或换模型都回归跑一遍，盯三个指标：</p>
+        <ul>
+          <li><strong>召回命中率</strong>：该命中的文档有没有真的被召回到；</li>
+          <li><strong>答案忠实度（faithfulness）</strong>：生成的答案是否都能在上下文里找到依据，有没有脱离材料瞎编；</li>
+          <li><strong>兜底是否生效</strong>：对知识库里没有的问题，是不是老实说不知道。</li>
+        </ul>
+
+        <h2>备选方案与权衡</h2>
+        <ul>
+          <li><strong>切分：定长 vs 结构化</strong>：定长实现简单但会切断语义；结构化更准但要吃文档格式。我选「结构化优先、超长滑窗兜底」；</li>
+          <li><strong>检索：向量 vs BM25 vs 混合</strong>：向量擅长语义、BM25 擅长精确词，混合 + rerank 最稳但成本更高；</li>
+          <li><strong>工具调用：Function Call vs MCP</strong>：Function Call 是当下主流、接一个工具配一个 schema；MCP 是更标准化的工具接入协议，工具多了之后更省心。当前我用 Function Call，MCP 作为下一步演进方向。</li>
+        </ul>
+
+        <blockquote><p>核心经验：<strong>RAG 的价值不在「让大模型答得更溜」，而在「让它答得有据、且知道自己什么时候答不了」</strong>。离线把解析、结构化分段、定位元信息做扎实，在线用意图识别分流、混合检索+rerank 喂上下文、用 prompt 约束有据才答、用溯源钉回原文、用兜底拦幻觉、用标注集回归——整条工作流加起来，才是企业敢真正用起来的问答 Agent。</p></blockquote>
       </div>
     </article>
     <script src="/assets/js/main.js"></script>

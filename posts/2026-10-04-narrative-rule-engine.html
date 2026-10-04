@@ -18,7 +18,7 @@
       </header>
 
       <div class="article-body">
-        <p>Lunetale 是面向海外、已上线 App Store 的 AI 互动视觉小说平台，分支剧情、地图热点、NPC 状态、任务背包、多结局全都要支持。最早这些逻辑写死在 Go 代码里，运营要加一条分支、改一个解锁条件，都得我改代码、跟着发版。上线后剧情改动频率远高于后端改动，这个模式完全扛不住。于是我在 Genesis 叙事引擎 V2 里把这套东西抽成了一套「条件-效果」规则引擎：剧情侧只填配置，核心代码一行不改就能上一条新分支。这篇讲清楚它怎么设计。</p>
+        <p>Lunetale 是面向海外、已上线 App Store 的 AI 互动视觉小说平台，分支剧情、地图热点、NPC 状态、任务背包、多结局全都要支持。最早这些逻辑写死在 Go 代码里，运营要加一条分支、改一个解锁条件，都得我改代码、跟着发版。上线后剧情改动频率远高于后端改动，这个模式完全扛不住。于是我在 Genesis 叙事引擎 V2 里把这套东西抽成了一套「条件-效果」规则引擎：剧情侧只填配置，核心代码一行不改就能上一条新分支。这篇讲清楚它怎么设计，以及它和 LLM 之间那条不能越界的线。</p>
 
         <h2>为什么不能把剧情写死在代码里</h2>
         <p>一开始为了快，分支判断就是一堆 <code>if/else</code>。问题很快暴露：每加一个地图热点要改路由、每加一个结局要加枚举；剧情策划不懂 Go，所有需求都堆在我这。更麻烦的是同一套叙事要跑在 C 端 App 上，改一次就要重新发版。结论很直接：<strong>会变的部分（剧情数据）和稳定的部分（引擎）必须分开</strong>。</p>
@@ -28,32 +28,32 @@
         <pre><code>type Rule struct {
     ID        uint
     SceneID   string
-    Priority  int         // 数值大的先匹配
+    Priority  int         // 数值大的先求值
     Once      bool        // 是否只触发一次
     Condition []Condition `json:"condition"`
     Effect    []Effect    `json:"effect"`
 }
 
 type Condition struct {
-    Fact     string      `json:"fact"` // 如 quest.has_item / npc.rep
-    Operator string      `json:"op"`   // eq gt lt in not
+    Fact     string      `json:"fact"` // 如 bag.item.key_3 / npc.rep.npc_01
+    Operator string      `json:"op"`   // eq ne gt lt ge le not
     Value    interface{} `json:"value"`
 }
 
 type Effect struct {
-    Action string      `json:"action"` // add_item set_flag goto_scene unlock_ending
+    Action string      `json:"action"` // add_item add_rep goto_scene unlock_ending
     Target string      `json:"target"`
     Value  interface{} `json:"value"`
 }</code></pre>
 
-        <h2>求值循环：自上而下匹配，命中即执行</h2>
-        <p>玩家进入场景或做出选择时，引擎把该场景下的规则按 Priority 排序逐条求值。条件全过就执行效果，Once 规则执行完打标，下次不再命中：</p>
+        <h2>求值循环：同场景命中规则依次执行</h2>
+        <p>这里要纠正一个常见误解：<strong>求值循环不会在命中第一条后短路</strong>。产品上同一个进入动作往往要叠加多条规则——比如同时加好感、解锁一个标记、再跳转场景。所以引擎把该场景下的规则按 Priority 排序逐条求值，命中就执行它的效果，然后继续往下走。<code>Once</code> 只保证「这条规则本身不重复触发」，而不是「命中即停」：</p>
         <pre><code>func (e *Engine) Evaluate(ctx *EvalContext, sceneID string) ([]Effect, error) {
     rules := e.store.ByScene(sceneID).SortByPriority()
     var applied []Effect
     for _, r := range rules {
         if r.Once &amp;&amp; ctx.Fired(r.ID) {
-            continue
+            continue // 这条已触发过，跳过；但不影响后面的规则
         }
         if allMatch(r.Condition, ctx) {
             for _, fx := range r.Effect {
@@ -76,40 +76,96 @@ func allMatch(conds []Condition, ctx *EvalContext) bool {
     }
     return true
 }</code></pre>
+        <p>求值纯内存、可重放：Fact 是一串点路径（<code>bag.item.key_3</code>、<code>npc.rep.npc_01</code>），EvalContext 把背包、任务、好感、flag 摊平成一张 map，条件只跟这张 map 打交道，不直接碰数据库。</p>
 
-        <h2>条件里能查什么：摊平的 Fact 上下文</h2>
-        <p>Fact 是一串点路径，比如 <code>quest.rep.npc_01</code>、<code>bag.item.key_3</code>、<code>flag.met_old_man</code>。引擎的 EvalContext 把玩家的背包、任务进度、NPC 好感度、全局 flag 都摊平成一张 map，条件只跟这张 map 打交道，不直接碰数据库。这样求值纯内存、可重放、好写测试：</p>
-        <pre><code>type EvalContext struct {
-    PlayerID uint
-    facts    map[string]interface{}
-    fired    map[uint]bool
+        <h2>compare：运算符分发与类型强转</h2>
+        <p>条件求值的核心是 <code>compare</code>。最容易踩的坑是类型：配置里写的是字符串 <code>"50"</code>，上下文里存的是数值 <code>50</code>，直接比会误判。所以先把两边统一成数值再分发运算符：</p>
+        <pre><code>func compare(fact interface{}, op string, want interface{}) bool {
+    switch op {
+    case "eq":
+        return num(fact) == num(want)
+    case "ne":
+        return num(fact) != num(want)
+    case "gt":
+        return num(fact) &gt; num(want)
+    case "lt":
+        return num(fact) &lt; num(want)
+    case "ge":
+        return num(fact) &gt;= num(want)
+    case "le":
+        return num(fact) &lt;= num(want)
+    case "not": // 集合/包含取反
+        return !contains(fact, want)
+    }
+    return false
 }
 
-func (c *EvalContext) Get(fact string) interface{} {
-    return c.facts[fact]
+// num 把 "50" 与 50 统一成 float64，避免字符串/数值误判
+func num(v interface{}) float64 {
+    switch t := v.(type) {
+    case float64:
+        return t
+    case int:
+        return float64(t)
+    case string:
+        n, _ := strconv.ParseFloat(t, 64)
+        return n
+    }
+    return 0
 }</code></pre>
 
-        <h2>效果里能干什么：一小撮叙事原语</h2>
-        <p>效果 action 是引擎内置的一小撮动词，剧情作者只选动词、填参数，覆盖了我们要的全部叙事原语：</p>
-        <ul>
-          <li><code>add_item</code> / <code>remove_item</code>：改背包；</li>
-          <li><code>set_flag</code> / <code>add_rep</code>：打标记、加 NPC 好感度；</li>
-          <li><code>goto_scene</code>：切地图热点；</li>
-          <li><code>unlock_ending</code>：登记结局解锁，多结局靠它收口。</li>
-        </ul>
-        <p>关键约束：<strong>效果只能改内存上下文，不能在引擎里发请求、不能直接写库</strong>。落库由外层事务统一做，引擎只管「算出这次该变什么」，边界清楚才好测。</p>
+        <h2>一个完整规则：隐藏结局怎么配</h2>
+        <p>端到端看一条真实规则：玩家持有 <code>key_3</code>，且 <code>npc_01</code> 好感大于 50，进入阁楼场景时加 5 点好感并解锁真结局。全字段如下，运营在后台填的就是这个 JSON：</p>
+        <pre><code>{
+  "id": 1024,
+  "scene_id": "attic",
+  "priority": 10,
+  "once": true,
+  "condition": [
+    { "fact": "bag.item.key_3", "op": "gt", "value": 0 },
+    { "fact": "npc.rep.npc_01", "op": "gt", "value": 50 }
+  ],
+  "effect": [
+    { "action": "add_rep", "target": "npc_01", "value": 5 },
+    { "action": "unlock_ending", "target": "ending_true", "value": null }
+  ]
+}</code></pre>
+        <p>这条规则不需要任何 Go 代码：<code>bag.item.key_3</code> 和 <code>npc.rep.npc_01</code> 都是上下文里现成的 fact，命中即落结局。</p>
 
-        <h2>配置化：规则存在数据库，热更新</h2>
-        <p>规则整张存在 PostgreSQL，运营在后台填表，前端存成 JSON。引擎启动时加载，或按场景懒加载后放 Redis。改一条规则不用发版，刷一下缓存就生效。多结局也是配置：结局节点本身就是一条 <code>unlock_ending</code> 效果，触发即记录，无需在代码里枚举结局。</p>
+        <h2>引擎与 LLM 的边界：谁管状态，谁管文本</h2>
+        <p>这是最关键的架构判断。<strong>规则引擎是确定性的，负责状态流转、解锁、结局；LLM 是概率性的，只负责自由文本</strong>。LLM 不能直接改玩家状态——它可能幻觉、可能漏动作。正确做法是让 LLM 在生成对白的同时，按约定格式吐出结构化动作（比如 <code>action: give_item(key_3)</code>），后端解析后回灌成 fact / 事件，再交给规则引擎求值：</p>
+        <pre><code>玩家输入 / 选择
+      |
+      v
+[LLM] 生成自由文本对白 + 结构化动作(action)
+      |                                   |
+      | 旁白/对白 -&gt; 渲染                  | 结构化动作
+      v                                   v
+  渲染层                        [解析动作 -&gt; 写 fact/背包]
+                                          |
+                                          v
+                                   [规则引擎 Evaluate]
+                                          |
+                                          +-- 命中 unlock_ending =&gt; 落结局</code></pre>
+        <p>这样 LLM 再怎么胡说八道，真正改状态的只有那几条被解析出来的动作，结局永远由确定性引擎收口。</p>
+
+        <h2>备选方案：为什么不用 Lua / JS 脚本沙箱</h2>
+        <p>更灵活的做法是给剧情写脚本（嵌 Lua 或 JS 沙箱），但我们没选，权衡如下：</p>
+        <ul>
+          <li><strong>安全</strong>：脚本沙箱要防逃逸、防死循环，等于自己造一个运行时，攻击面大；</li>
+          <li><strong>运维</strong>：策划要学一门脚本语言，调试链路变长，出了问题分不清是剧情写错还是引擎 bug；</li>
+          <li><strong>热更</strong>：我们要的只是「条件组合 + 固定动作」，JSON 配置已经够，且能直接在后台表单化。</li>
+        </ul>
+        <p>代价是表达力有限——复杂分支得拆成多条规则叠加。对我们这个场景，<strong>用表达力换安全和可维护，是划算的</strong>。</p>
 
         <h2>被生产环境教出来的细节</h2>
         <ul>
-          <li>求值顺序：Priority 高的先匹配，先命中的 Once 规则会短路后面，策划必须清楚排序语义；</li>
-          <li>幂等：效果里的 <code>add_item</code> 要按规则 ID 去重，否则一次进入场景重复触发会刷物品；</li>
-          <li>类型：Fact 值有 int / string / bool，比较前要统一成同型，否则 <code>1</code> 和 <code>"1"</code> 会误判相等。</li>
+          <li>求值顺序：Priority 高的先执行，先执行的效果会改变上下文，影响后面规则的条件，策划要清楚这个副作用；</li>
+          <li>幂等：<code>add_item</code> 按规则 ID 去重，否则一次进入场景重复触发会刷物品；</li>
+          <li>类型：比较前统一成同型，<code>1</code> 和 <code>"1"</code> 不能误判相等。</li>
         </ul>
 
-        <blockquote><p>核心经验：<strong>把「会变的剧情」降级成数据，把「不变的引擎」收敛成代码</strong>。条件-效果这套模型笨但够用——它没有 DSL、没有脚本沙箱，却把分支、地图热点、NPC 状态、背包与多结局全部配置化，支撑多线多结局叙事而无需改核心代码。</p></blockquote>
+        <blockquote><p>核心经验：<strong>把「会变的剧情」降级成数据，把「不变的引擎」收敛成代码</strong>。条件-效果这套模型笨但够用，支撑多线多结局叙事而无需改核心代码；更重要的是守住那条边界——LLM 只管自由文本，状态与结局永远由确定性规则引擎收口。相关的积分与扣费一致性，可参见<a href="/posts/2026-09-25-points-system.html">积分体系</a>与<a href="/posts/2026-09-25-redis-distributed-lock.html">Redis 分布式锁</a>两篇。</p></blockquote>
       </div>
     </article>
     <script src="/assets/js/main.js"></script>

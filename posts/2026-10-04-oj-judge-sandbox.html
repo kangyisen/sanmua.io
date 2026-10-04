@@ -18,102 +18,134 @@
       </header>
 
       <div class="article-body">
-        <p>主站负责题目、提交、排行榜，本身是典型的 Web 业务。但「跑用户提交的代码」这件事天生和 Web 不是一类工作：它不可信、吃资源、语言五花八门。把它和主站揉在一个进程里，等于把陌生人的代码放进自己的内存空间。所以在这个在线判题系统里，我把评测单独拆成一个 FastAPI 微服务，用 Docker 做隔离。这篇讲清楚为什么要拆、一次提交怎么跑、容器的 CPU/内存/时间/网络到底怎么限。</p>
+        <p>主站负责题目、提交、排行榜，是典型 Web 业务。但「跑用户提交的代码」天生和 Web 不是一类工作：它不可信、吃资源、语言五花八门。这个在线判题系统里我把评测单独拆成 FastAPI 微服务，用 Docker 做隔离。这篇讲清楚为什么拆、一次提交怎么跑、容器怎么限资源，以及一个被我自己写错又修回来的 TLE 判定 bug。配套的出题侧见<a href="/posts/2026-10-04-llm-problem-generation.html">LLM Agent 自动出题</a>。</p>
 
-        <h2>为什么把判题从主站解耦出去</h2>
-        <p>一开始我也想图省事，在主站里直接起进程跑用户代码。做了两天就放弃了，理由很现实：</p>
-        <ul>
-          <li><strong>安全</strong>：用户代码里写 <code>os.system("rm -rf /")</code>、读宿主环境变量、连内网数据库，主站进程会跟着遭殃；</li>
-          <li><strong>资源隔离</strong>：一份死循环或者超大数组不能把整个主站拖垮；</li>
-          <li><strong>可独立扩缩</strong>：评测是 CPU 密集且排队的活儿，主站闲、评测忙时只加评测节点即可；</li>
-          <li><strong>语言镜像独立</strong>：C/C++、Python、Java 用各自的基础镜像，升级一种语言不碰其他。</li>
-        </ul>
-        <p>于是主站只做一件事：接收提交，丢进队列，把结果写库。真正跑代码的全在判题服务里。</p>
-
-        <h2>一次提交的完整评测流水线</h2>
-        <p>判题服务从队列拿到一条提交后，流程是固定的几步：拉题目与测试点 → 起容器 → 编译 → 逐个测试点运行并比对 → 回收容器。FastAPI 这层很薄，只做路由和编排，重活全交给容器：</p>
+        <h2>一次提交的端到端流水</h2>
+        <p>主站只做接收与写库，评测在后台队列里跑。整条链可以画成这样：</p>
+        <pre><code>用户提交
+   |
+   v
+主站 API --写入--&gt; 评测队列(Redis)
+                        |
+                        v
+                 判题 worker (FastAPI 后台任务)
+                        |
+                        +-- 拉取题目/测试点
+                        +-- 起 Docker 容器(限资源)
+                        +-- 编译 -&gt; 喂输入 -&gt; 收集输出 -&gt; 比对
+                        +-- 回收容器
+                        |
+                        v
+                 结果回写主站(AC/WA/TLE/MLE/CE)</code></pre>
+        <p>FastAPI 这层很薄，路由只负责把提交丢进异步任务就返回，真正跑代码的全在容器里：</p>
         <pre><code>@app.post("/judge")
 async def judge(submission: SubmissionIn):
-    # 1. 从题目服务拉测试点（示例：内存里取，真实走题目微服务）
-    problem = await problem_client.fetch(submission.problem_id)
-    # 2. 丢进异步任务，立刻返回，评测在后台慢慢跑
-    asyncio.create_task(run_case(submission, problem))
+    asyncio.create_task(run_submission(submission))  # 后台慢慢跑
     return {"status": "queued", "submission_id": submission.id}</code></pre>
-        <p>评测不阻塞接口，前端轮询或等回调拿结果，这是判题服务能扛住并发提交的前提。</p>
 
-        <h2>用 Docker SDK 起一个受限容器</h2>
-        <p>核心是跑起来之前把「权限」先收紧。我用官方 <code>docker</code> Python SDK，一次 <code>containers.run</code> 把 CPU、内存、网络、文件系统都限死：</p>
+        <h2>起容器：一道参数就是一道防线</h2>
+        <p>用官方 <code>docker</code> Python SDK，跑之前先把权限收紧。下面这版补全了之前漏掉的几项硬限制，每项都对应一类真实攻击：</p>
         <pre><code>import docker
 client = docker.from_env()
 
-def run_in_container(image, cmd, source_dir, time_limit, mem_limit):
+def start_runner(source_dir, time_limit, mem_limit=256, cpu_limit=0.5):
     return client.containers.run(
-        image=image,
-        command=cmd,
+        image="oj-runner:py311",
+        command=["python", "main.py"],
         volumes={source_dir: {"bind": "/workspace", "mode": "rw"}},
         working_dir="/workspace",
         detach=True,
-        remove=True,                 # 跑完自动删，不留垃圾容器
-        network_disabled=True,        # 断网，杜绝反向连外网/内网
-        mem_limit=f"{mem_limit}m",   # 内存硬上限
-        nano_cpus=int(0.5 * 1e9),     # 等于 --cpus 0.5，半核
-        read_only=True,              # 根文件系统只读
-        tmpfs={"/tmp": "size=64m"},  # 只给 /tmp 一块可写临时卷
+        # 资源：内存硬上限 + 半核（示例默认值）
+        mem_limit=f"{mem_limit}m",
+        nano_cpus=int(cpu_limit * 1e9),   # 等价 --cpus 0.5
+        pids_limit=64,                   # 防 fork 炸弹：进程数封顶
+        # 权限：丢弃 capabilities、禁止提权
+        cap_drop=["ALL"],
+        security_opt=["no-new-privileges"],
+        # 文件系统：根只读，只给 /tmp 一块临时可写盘
+        read_only=True,
+        tmpfs={"/tmp": "size=64m"},
+        # 网络：彻底断网
+        network_disabled=True,
     )</code></pre>
-        <p>这里几个参数是「被生产环境教出来的细节」：<code>network_disabled</code> 直接断掉网络，比任何防火墙规则都干净；<code>read_only</code> 加 <code>tmpfs</code> 是因为程序运行时难免要写临时文件，全只读会误杀正常程序，于是只放行一块明确大小的临时盘。</p>
+        <p>逐项说意图：<code>pids_limit</code> 挡 fork 炸弹（<code>while True: os.fork()</code>）；<code>cap_drop=["ALL"]</code> 丢掉容器默认拿到的 Linux capabilities，<code>no-new-privileges</code> 禁止 setuid 提权；<code>read_only</code> 加 <code>tmpfs</code> 是因为程序难免写临时文件，全只读会误杀正常程序，于是只放行一块明确大小的临时盘；<code>network_disabled</code> 断网，比防火墙规则干净。</p>
 
-        <h2>时间限制：超时必须硬杀</h2>
-        <p>CPU 和内存靠 Docker 内核层面限制，但「超时」不能只靠容器自己掐。死循环的进程不会自己退出，必须由外部看门狗在到点时强制结束：</p>
-        <pre><code>import time
+        <h2>TLE 判定：我写错过的那版</h2>
+        <p>这是这篇最想讲清楚的坑。我第一版是这么写的——看起来对，其实超时永远触发不了：</p>
+        <pre><code># 错误示范：wait() 会一直阻塞到进程自己结束
+start = time.time()
+container.wait()                 # 死循环在这里永远等不回来！
+elapsed = time.time() - start    # 这行根本执行不到
+if elapsed &gt; time_limit_s:
+    container.kill()</code></pre>
+        <p>问题在于死循环进程不会自己退出，<code>wait()</code> 阻塞到天荒地老，后面的超时判断成了死代码。正确做法是<strong>让看门狗和 wait 并发</strong>：一条线程负责「到点强杀」，主线程负责「等它正常结束」，谁先到算谁：</p>
+        <pre><code>import threading, time
 
-def run_with_timeout(container, time_limit_s):
-    start = time.time()
-    result = container.wait()   # 阻塞等容器结束
-    elapsed = time.time() - start
-    if elapsed &gt; time_limit_s or container.status == "running":
-        container.kill()        # 到点还在跑，直接杀掉，判 TLE
-        return {"verdict": "TLE", "elapsed": elapsed}
-    return {"verdict": "OK", "elapsed": elapsed}</code></pre>
-        <p>判 TLE（Time Limit Exceeded）的依据是「墙钟时间超过阈值就 kill」，而不是等它自己跑完。内存超限则由 Docker 的 <code>mem_limit</code> 触发 OOM，进程被内核杀掉，对应 MLE。</p>
+def run_with_watchdog(container, time_limit_s):
+    killed_by_watchdog = {"on": False}
 
-        <h2>编译与逐测试点比对</h2>
-        <p>不同语言的动作不一样：C/C++ 要先 <code>g++</code> 编译再运行，Python/Java 视情况直接解释运行。编译失败直接判 Compile Error；编译过了，再把每个测试点的输入喂进容器，拿标准输出和期望输出逐行比对：</p>
-        <pre><code>def evaluate(proc_out, expected):
-    # 忽略末尾空行差异，避免 PE 误判
-    out = proc_out.strip().splitlines()
-    exp = expected.strip().splitlines()
-    if out == exp:
-        return "AC"
-    return "WA"</code></pre>
-        <p>编译和运行用不同镜像阶段：编译镜像带编译器，运行镜像尽量精简，两者职责分开，也让运行时更安全。</p>
+    def watchdog():
+        time.sleep(time_limit_s)          # 到点了还没退出
+        if container.status == "running":
+            killed_by_watchdog["on"] = True
+            container.kill()              # SIGKILL，强制结束
 
-        <h2>资源限制一览</h2>
-        <p>把上面散落的限制汇总成一张表，方便对照 <code>docker run</code> 的等价参数：</p>
+    t = threading.Thread(target=watchdog, daemon=True)
+    t.start()
+    ret = container.wait()                 # 正常结束会先返回
+    exit_code = ret["StatusCode"]
+    container.reload()
+    if killed_by_watchdog["on"]:
+        return {"verdict": "TLE"}          # 墙钟超时被强杀
+    if exit_code == 137:                   # 128+9 SIGKILL，多为 OOM
+        return {"verdict": "MLE"}
+    return {"verdict": "RUN_OK", "exit_code": exit_code}</code></pre>
+        <p>判据要点：<strong>TLE = 墙钟时间到点被看门狗 SIGKILL</strong>。这里必须区分两个时间——墙钟时间（真实流逝秒数）和 CPU 时间（进程实际占用 CPU 的秒数）。在 <code>nano_cpus</code> 限流下，一个进程跑满半核时墙钟 1 秒只换到约 0.5 秒 CPU，二者不再相等。OJ 传统上用墙钟做 TLE 上限（用户可感知），如果要更精细，可再取容器的 CPU 用量：</p>
+        <pre><code>stats = container.stats(stream=False)
+cpu_delta = stats["cpu_stats"]["cpu_usage"]["total_usage"] - \
+            stats["precpu_stats"]["cpu_usage"]["total_usage"]</code></pre>
+
+        <h2>编译→喂输入→收输出→比对的完整链路</h2>
+        <p>光起容器不够，还得把测试点输入喂进去、把输出捞出来。我走「挂载文件」的方式：把测试点输入写成 <code>input.txt</code> 挂进容器，程序从标准输入读，跑完再从容器日志里取 stdout：</p>
+        <pre><code>def evaluate_one(problem, workdir):
+    # 1. 编译（C/C++ 为例，解释型语言跳过这步）
+    compile_in_container(workdir, src="main.cpp")
+    results = []
+    for i, case in enumerate(problem.test_cases):
+        write_input(workdir, case["input"])      # 落盘 input.txt
+        c = start_runner(workdir, time_limit=problem.time_limit)
+        verdict = run_with_watchdog(c, problem.time_limit)
+        # 2. 先取日志、再决定回收，顺序很关键（见下节）
+        out = c.logs(stdout=True, stderr=False).decode().strip()
+        err = c.logs(stdout=False, stderr=True).decode().strip()
+        c.remove()                               # 手动回收
+        results.append(judge(case["output"], out, verdict, err))
+    return results</code></pre>
+        <p>比对时忽略末尾空行差异，避免 Presentation Error 误判；编译失败单独判 CE，不进入运行环节。</p>
+
+        <h2>remove=True 的时序陷阱</h2>
+        <p>上面我特意用 <code>detach=True</code> 起、最后手动 <code>c.remove()</code>，而不是 <code>remove=True</code>。原因是时序：<code>remove=True</code> 会在容器一停止就立刻删掉它——一旦进程被看门狗 kill 掉，容器马上销毁，你再去 <code>container.logs()</code> 就会报「No such container」，CE 的报错信息和 WA 的真实输出全都拿不到。所以正确顺序是<strong>先 wait / logs 取完，再 remove</strong>。</p>
+
+        <h2>挂 docker.sock 的风险，以及加固方案</h2>
+        <p>判题服务要能「起子容器」，就得挂宿主的 <code>/var/run/docker.sock</code>。这一步等于把宿主 root 权限交给了这个服务——一旦判题服务自身被攻破，攻击者就能直接在宿主上起特权容器。我没有回避它，而是把可选加固方案列清楚，按取舍选：</p>
         <table>
-          <thead><tr><th>风险</th><th>做法</th><th>等价 docker run</th></tr></thead>
+          <thead><tr><th>方案</th><th>隔离强度</th><th>代价 / 取舍</th></tr></thead>
           <tbody>
-            <tr><td>吃满 CPU</td><td><code>nano_cpus</code> 限核数</td><td><code>--cpus 0.5</code></td></tr>
-            <tr><td>爆内存</td><td><code>mem_limit</code> 硬上限</td><td><code>--memory 256m</code></td></tr>
-            <tr><td>死循环</td><td>外部超时 <code>kill</code></td><td><code>timeout</code> 命令 / 看门狗</td></tr>
-            <tr><td>连外网</td><td><code>network_disabled</code></td><td><code>--network none</code></td></tr>
-            <tr><td>改宿主文件</td><td>只读根 + tmpfs</td><td><code>--read-only --tmpfs /tmp</code></td></tr>
+            <tr><td>原生 Docker + 挂 sock</td><td>中</td><td>最简单，但挂 sock ≈ 宿主 root</td></tr>
+            <tr><td>gVisor (runsc)</td><td>高</td><td>用户态拦截 syscall，冷启动略慢</td></tr>
+            <tr><td>rootless Docker</td><td>中高</td><td>非 root 跑 daemon，攻击面小，部分特性受限</td></tr>
+            <tr><td>独立评测机 + 受限 API</td><td>最高</td><td>评测节点与主网络隔离，需额外运维</td></tr>
           </tbody>
         </table>
+        <p>gVisor 是我觉得性价比最高的折中：给 runner 镜像换 <code>runtime=runsc</code> 即可，syscall 被拦在用户态，即使容器被突破也很难触到宿主内核。规模再大就上独立评测机，把它放在单独网段，主站只能通过一个受限的提交接口投递任务。</p>
 
-        <h2>用 Compose 一键编排判题服务</h2>
-        <p>判题服务本身依赖题目接口、队列、数据库，手起手停很容易漏。我把它写进 <code>docker-compose.yml</code>，评测服务和依赖一起拉起，<code>privileged</code> 之外不额外放权——它自己要能起子容器，所以挂了宿主的 <code>/var/run/docker.sock</code>：</p>
-        <pre><code>services:
-  judge:
-    build: ./judge
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    deploy:
-      resources:
-        limits:
-          memory: 2g</code></pre>
-        <p>挂 docker.sock 意味着判题服务拥有「起容器」的能力，这是它能当沙箱父进程的前提；但每一个被它起的评测容器又都被限得很死，形成「父服务有权限、子任务被关在笼子里」的两层结构。</p>
+        <h2>备选方案与权衡</h2>
+        <ul>
+          <li><strong>Docker vs gVisor vs 虚拟机</strong>：Docker 冷启动最快、隔离最弱；gVisor 在中间；每个测试点开一台完整虚拟机隔离最强但冷启动秒级、吞吐低。OJ 高频短任务，我选 Docker/gVisor，不选 VM；</li>
+          <li><strong>队列上限与扩缩</strong>：worker 设并发上限（示例 4），队列堆积时只加评测节点，不碰主站——这正是当初要解耦的原因。</li>
+        </ul>
 
-        <blockquote><p>核心经验：<strong>判题的本质不是「跑代码」，而是「在可信的边界内跑不可信的代码」</strong>。把评测拆成独立微服务，是为了让安全和资源问题被集中处理一次；Docker 的 CPU、内存、网络、只读根文件系统则是这道边界的具体落地。永远假设用户的代码会搞破坏，然后让任何破坏都被关在一个跑完即删的容器里。</p></blockquote>
+        <blockquote><p>核心经验：<strong>判题的本质不是「跑代码」，而是「在可信边界内跑不可信代码」</strong>。TLE 不是靠「等它超时」而是靠看门狗与 wait 并发强杀；隔离不是一个 <code>run</code> 参数，而是 <code>mem/cpu/pids/cap_drop/read_only/network</code> 一整套。永远假设用户代码会搞破坏，然后让任何破坏都被关在一个跑完即删的容器里。</p></blockquote>
       </div>
     </article>
     <script src="/assets/js/main.js"></script>

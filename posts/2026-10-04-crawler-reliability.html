@@ -18,10 +18,20 @@
       </header>
 
       <div class="article-body">
-        <p>这个采集平台最终是用 Docker / systemd 部署在一台 Linux 机器上长跑的。长跑的进程我早就不指望它不挂了——OOM、发版重启、宿主机维护、甚至掉电，都会发生。真正的问题不是"会不会崩"，而是"崩了能不能自己爬起来、并且一条任务都不丢、也不重复抓一堆"。这篇讲我用 SQLite outbox、崩溃恢复、优雅停机，再加 Redis 去重和 Lua 看门狗，把这套可靠性兜起来的过程。</p>
+        <p>这个采集平台最终用 Docker / systemd 部署在一台 Linux 机器上长跑。长跑的进程我早就不指望它不挂——OOM、发版重启、宿主机维护、甚至掉电都会发生。真正的问题不是"会不会崩"，而是"崩了能不能自己爬起来、一条任务都不丢、也不重复抓一堆"。这篇讲我用 SQLite outbox、崩溃恢复、优雅停机，再加 Redis 去重和 Lua 看门狗把可靠性兜起来的过程。并发模型见<a href="/posts/2026-10-04-asyncio-crawler-concurrency.html">asyncio 两级并发那篇</a>，对外抓取的安全校验见<a href="/posts/2026-10-04-ssrf-protection.html">SSRF 防护那篇</a>。</p>
+
+        <h2>一条任务的一生：先看时序图</h2>
+        <p>把 outbox、心跳、看门狗放在一张时序图里，后面的代码就顺了：</p>
+        <pre><code> worker :  claim -&gt; SET hb ex=10s -&gt; 干活(每3s续租) -&gt; 成功: DEL hb + 置 done
+ sweep  :  每 5s 扫 processing:
+            hb 还在 ?  -&gt; alive, 跳过
+            hb 没了 ?  -&gt; INCR fail
+                          fail &lt; 阈值 -&gt; requeue (UPDATE ... WHERE status='processing')
+                          fail &gt;= 阈值 -&gt; dead (死信)
+ requeue:  以 SQLite 状态为准，幂等更新，避免 Redis 与库状态不一致</code></pre>
 
         <h2>为什么要 outbox：先落库，再干活</h2>
-        <p>最开始任务只活在内存队列里，进程一死，队列里所有待抓 URL 全部蒸发。我的改造思路很朴素：<strong>凡是要做的事，先写进本地 SQLite，再去做</strong>。SQLite 单文件、随进程、不用额外依赖，正好当本地 outbox。任务从 outbox 里领走、处理完再更新状态，这样即使处理到一半进程崩了，记录还在磁盘上。</p>
+        <p>最开始任务只活在内存队列里，进程一死就全蒸发。改造思路很朴素：<strong>凡是要做的事，先写进本地 SQLite，再去做</strong>。任务从 outbox 领走、处理完再更新状态，这样处理到一半崩了，记录还在磁盘上：</p>
         <pre><code>CREATE TABLE IF NOT EXISTS outbox (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     url         TEXT NOT NULL,
@@ -30,86 +40,88 @@
     fail_count  INTEGER NOT NULL DEFAULT 0,
     created_at  TEXT NOT NULL,
     updated_at  TEXT NOT NULL
-);
+);</code></pre>
 
-def enqueue(db, url, source):
-    db.execute(
-        "INSERT INTO outbox(url, source, status, created_at, updated_at) "
-        "VALUES(?, ?, 'pending', datetime('now'), datetime('now'))",
-        (url, source),
-    )
-    db.commit()</code></pre>
+        <h2>asyncio 里用 SQLite：aiosqlite + WAL</h2>
+        <p>SQLite 是同步阻塞的，直接在事件循环里 <code>execute</code> 会卡住所有协程。我用 <code>aiosqlite</code> 把 IO 丢到线程池，同时开 <strong>WAL 模式</strong>——读写不再互锁，writer 和 reader 可以并发，多 worker 抢写时也不至于立刻 <code>database is locked</code>：</p>
+        <pre><code>import aiosqlite
 
-        <h2>崩溃恢复：启动时把没做完的任务捞回来</h2>
-        <p>进程正常退出时任务会走到 done，但崩溃时那些标记成 <code>processing</code> 的任务其实没人做完——它们是上次死掉的 worker 留下的残骸。所以<strong>启动第一件事，就是把这些"卡在 processing"的任务重置回 pending</strong>，让它们重新被调度：</p>
-        <pre><code>def recover_stale(db):
-    # 上次崩溃时正在处理、却没人收尾的任务，全部退回待处理
-    cur = db.execute(
+async def init_db(path: str):
+    db = await aiosqlite.connect(path)
+    await db.execute("PRAGMA journal_mode=WAL")   # 读写不互锁
+    await db.execute("PRAGMA busy_timeout=5000")  # 拿不到锁先等 5s 再报错
+    return db</code></pre>
+
+        <h2>崩溃恢复：启动时把 processing 残骸捞回来</h2>
+        <p>正常退出时任务走到 done，崩溃时那些 <code>processing</code> 其实没人收尾。启动第一件事就是把它们重置回 pending：</p>
+        <pre><code>async def recover_stale(db) -&gt; int:
+    cur = await db.execute(
         "UPDATE outbox SET status='pending', updated_at=datetime('now') "
-        "WHERE status='processing'"
-    )
-    db.commit()
-    return cur.rowcount   # 启动日志里打一行，能直观看到恢复了多少条</code></pre>
-        <p>配合前面那篇讲的队列，恢复流程就是：启动 → <code>recover_stale()</code> 把遗留任务翻出来 → 再 <code>SELECT ... WHERE status='pending'</code> 灌回内存队列。不需要人工干预，systemd 一拉起就自动续上。</p>
+        "WHERE status='processing'")
+    await db.commit()
+    return cur.rowcount   # 启动日志打一行，直观看到恢复了多少条</code></pre>
 
         <h2>优雅停机：收到 SIGTERM 后的四步</h2>
-        <p>Docker 停容器、systemd 停服务，发的都是 <code>SIGTERM</code>。如果进程不管三七二十一直接退出，在途任务又会变成上面那种残骸。部署在 Linux 上，我用 asyncio 的信号处理做优雅停机，分四步走：</p>
-        <ul>
-          <li>收到 <code>SIGTERM</code> / <code>SIGINT</code>，置一个停止标志位；</li>
-          <li><strong>停止取新任务</strong>：生产者不再往队列里塞新 URL；</li>
-          <li><strong>等待在途任务收尾</strong>：<code>await queue.join()</code>，让正在抓的请求自然跑完并落库；</li>
-          <li>最后把 outbox 的缓冲 <code>commit / flush</code> 干净再退出。</li>
-        </ul>
-        <pre><code>async def shutdown(loop, sig):
-    stopping.set()                 # 通知生产者停止取新任务
-    await queue.join()             # 等在途任务跑完、状态落库
-    db.commit()                    # 最后再 flush 一次
-    loop.stop()
+        <p>Docker / systemd 停服务发的都是 <code>SIGTERM</code>。部署在 Linux 上，我用 asyncio 信号处理分四步：置停止位 → 停止取新任务 → <code>await queue.join()</code> 等在途收尾 → flush 落库再退出。这样停机窗口里的任务要么做完，要么停在 pending 等下次恢复，<strong>绝不会停在半中间的 processing</strong>。</p>
 
-loop = asyncio.get_running_loop()
-for sig in (signal.SIGTERM, signal.SIGINT):
-    loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(shutdown(loop, s)))</code></pre>
-        <p>这样停机窗口里的任务要么正常做完，要么停在 <code>pending</code> 等下次恢复，<strong>绝不会停在半中间的 <code>processing</code></strong>。</p>
+        <h2>去重：URL 规范化 + 内容指纹</h2>
+        <p>6 个源交叉转载很多，光给原始 URL 做哈希不够——同一篇文章带不同 <code>utm_*</code> 参数、不同片段，URL 哈希就不一样，还是会重复抓。我先规范化 URL（去追踪参数、去片段、去尾部斜杠），再叠一层正文哈希：</p>
+        <pre><code>from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
+TRACK = {"utm_source", "utm_medium", "utm_campaign", "utm_term"}
 
-        <h2>Redis 去重：别把同一篇文章抓两遍</h2>
-        <p>6 个数据源里有交叉转载，同一篇资讯可能从两个源都冒出来。抓取前我先问 Redis：这条 URL 的指纹见没见过？用 <code>SET NX</code>，写进去成功才抓，已经存在就直接跳过：</p>
-        <pre><code>def already_seen(r, url):
-    # NX：key 不存在才写入；返回 None 说明之前见过，直接跳过
-    ok = r.set(f"seen:{hashlib.sha1(url.encode()).hexdigest()}",
-               1, nx=True, ex=7 * 24 * 3600)
-    return ok is None</code></pre>
-        <p>key 带了过期时间，去重集合不会无限膨胀。量大之后可以再上布隆过滤器省内存，但当前量级用一个带 TTL 的 SET 就够了。</p>
+def normalize_url(raw: str) -&gt; str:
+    u = urlparse(raw)
+    q = [(k, v) for k, v in parse_qsl(u.query) if k not in TRACK]
+    return urlunparse(u._replace(fragment="", query=urlencode(q))).rstrip("/")
 
-        <h2>Lua 看门狗：超时没 ack 就重放</h2>
-        <p>优雅停机覆盖了"主动退出"，但覆盖不了"worker 卡死"——比如某个请求挂住、协程既不报错也不返回。任务标记成了 <code>processing</code>，却永远等不到它收尾。我的解法是看门狗：worker 领任务时在 Redis 写一个带 TTL 的心跳 key，处理过程中定期刷新；处理完删除并 ack。一个独立的清扫协程定期检查，<strong>发现任务还在 processing、但心跳 key 已经没了，就认定这个 worker 死了，把任务重放回 pending</strong>。</p>
-        <p>"判断心跳是否存在 + 失败计数 + 决定是否重放"这几步必须原子，否则两个清扫协程会同时重放同一条任务，所以用 Lua 脚本一次做完：</p>
+def seen_before(r, raw: str, body: str) -&gt; bool:
+    url_fp = hashlib.sha1(normalize_url(raw).encode()).hexdigest()
+    body_fp = hashlib.sha1(body.encode()).hexdigest()[:16]   # 大文本可换 simhash
+    key = f"seen:{url_fp}:{body_fp}"
+    return r.set(key, 1, nx=True, ex=7 * 24 * 3600) is None</code></pre>
+
+        <h2>看门狗：心跳续租 + 重放幂等</h2>
+        <p>优雅停机管不住"worker 卡死"。我的做法：worker 领任务时在 Redis 写带 TTL 的心跳 key，处理过程中周期续租，成功就主动删 key（即 ack）：</p>
+        <pre><code>async def heartbeat_loop(job_id: str, r, working: dict) -&gt; None:
+    key = f"hb:{job_id}"
+    while working.get(job_id):
+        await r.set(key, "1", px=10000)   # TTL 10s，每 3s 续租一次
+        await asyncio.sleep(3)
+    await r.delete(key)                   # ack：删掉心跳，看门狗就不会误判</code></pre>
+        <p>清扫协程发现任务还在 processing、心跳却没了，就认定 worker 死了。<strong>判断 + 计数 + 决定重放还是熔断必须原子</strong>，否则两个清扫协程会同时重放同一条。重放时我顺手删掉失败计数 key，给新 worker 一段宽限，避免"新心跳还没建立"前被二次计数：</p>
         <pre><code>watchdog = r.register_script("""
--- KEYS[1]=任务心跳 key  KEYS[2]=失败计数 key
--- ARGV[1]=失败阈值
-if redis.call("pttl", KEYS[1]) &lt; 0 then        -- 心跳没了，worker 已死
-    local n = redis.call("incr", KEYS[2])
-    redis.call("expire", KEYS[2], 86400)
+-- KEYS[1]=心跳 key  KEYS[2]=失败计数 key   ARGV[1]=失败阈值
+if redis.call("pttl", KEYS[1]) &lt; 0 then
+    local n = tonumber(redis.call("get", KEYS[2]) or "0") + 1
+    redis.call("set", KEYS[2], n, "EX", 86400)
     if n &gt;= tonumber(ARGV[1]) then
-        return "dead"                            -- 连续失败太多，熔断，别再重放
+        redis.call("del", KEYS[1])
+        return "dead"                    -- 连续失败太多，熔断进死信
     end
-    return "requeue"                             -- 正常重放一次
+    redis.call("del", KEYS[1])            -- 宽限：清心跳，等新 worker 重新续租
+    return "requeue"
 end
-return "alive"                                   -- 心跳还在，worker 活着，别动它
+return "alive"
 """)</code></pre>
-        <p>清扫协程拿到 <code>requeue</code> 就把 outbox 里这条任务改回 <code>pending</code>；拿到 <code>dead</code> 就标记成死信，交给人工或日志排查，<strong>不让一条坏任务无限重放、把系统和对端站点都拖死</strong>。</p>
+        <p>这里还有个跨存储的坑：Redis 说"该重放"，但 SQLite 里这条任务可能已经被别人处理成 done 了。所以<strong>重放以 SQLite outbox 状态为准，做幂等更新</strong>——只有还停在 processing 才改回 pending：</p>
+        <pre><code>async def requeue_if_stale(db, job_id: str) -&gt; bool:
+    cur = await db.execute(
+        "UPDATE outbox SET status='pending', updated_at=datetime('now') "
+        "WHERE id=? AND status='processing'", (job_id,))
+    await db.commit()
+    return cur.rowcount == 1   # 已是 done 则 rowcount=0，直接跳过，不重复发</code></pre>
 
-        <h2>可靠性是一层叠一层的，没有银弹</h2>
+        <h2>备选方案与权衡</h2>
         <table>
-          <thead><tr><th>风险</th><th>靠什么兜</th></tr></thead>
+          <thead><tr><th>我的选择</th><th>备选</th><th>取舍</th></tr></thead>
           <tbody>
-            <tr><td>进程崩溃丢任务</td><td>SQLite outbox 先落库，启动时恢复 <code>processing</code></td></tr>
-            <tr><td>发版/停容器丢在途任务</td><td>捕获 SIGTERM，停取新任务、等在途收尾再退出</td></tr>
-            <tr><td>重复抓取同一篇</td><td>Redis <code>SET NX</code> 指纹去重</td></tr>
-            <tr><td>worker 卡死无人收尾</td><td>心跳 + Lua 看门狗重放，连续失败熔断</td></tr>
+            <tr><td>SQLite outbox 本地落库</td><td>纯消息队列（Redis Stream / RabbitMQ）</td><td>单实例、要简单持久化与崩溃恢复，SQLite 零依赖；多实例消费才需要 MQ 的分区与确认机制</td></tr>
+            <tr><td>Redis SET NX 精确去重</td><td>布隆过滤器</td><td>SET 无假阳性、可按 TTL 淘汰，但内存随去重条数线性涨；布隆省内存但有误判（会误杀少量新文章），且不能删除</td></tr>
+            <tr><td>心跳 + Lua 看门狗重放</td><td>只靠 worker 超时异常</td><td>异常能覆盖"报错退出"，覆盖不了"协程静默卡死"；看门狗是兜后者的最后保险</td></tr>
           </tbody>
         </table>
 
-        <blockquote><p>核心经验：<strong>可靠性的本质是"任何时刻进程突然死掉，系统都能从磁盘上的状态自愈"</strong>。outbox 让任务不丢，优雅停机让在途任务不被腰斩，看门狗让卡死的任务不被遗忘，熔断让坏任务不无限重试。四件事叠起来，才敢把它交给 systemd 长跑。</p></blockquote>
+        <blockquote><p>核心经验：<strong>可靠性的本质是"任何时刻进程突然死掉，系统都能从磁盘上的状态自愈"</strong>。outbox 先落库不丢任务，WAL 让 SQLite 在 asyncio 下不卡不锁，优雅停机不腰斩在途任务，看门狗 + 幂等重放让卡死任务不被遗忘、也不被重复发。跨存储状态以 outbox 为准——Redis 会误报，SQLite 的条件更新不会。</p></blockquote>
       </div>
     </article>
     <script src="/assets/js/main.js"></script>

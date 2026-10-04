@@ -18,23 +18,16 @@
       </header>
 
       <div class="article-body">
-        <p>除了面向 C 端的 App，我还参与了 Lunetale 的 B 端管理后台 OpenGame：AI 游戏工程生成、在线构建与发布、模型中心、订单积分、数据看板都在这一侧。后台一多，最先头疼的就是权限——谁能看哪个菜单、谁能点哪个构建按钮，不能靠前端藏按钮糊弄。这篇讲我怎么用 JWT 加 Casbin 把权限粒度做到菜单和接口，以及在线构建这条链路是怎么跑的。</p>
+        <p>除了面向 C 端的 App，我还参与了 Lunetale 的 B 端管理后台 OpenGame：AI 游戏工程生成、在线构建与发布、模型中心、订单积分、数据看板都在这一侧。后台一多，最先头疼的就是两件事：构建这条异步链路怎么不卡死、不变成僵尸任务，以及权限怎么落到后端而不是只藏菜单。这篇讲我怎么用 JWT 加 Casbin 把权限粒度做到接口，以及构建任务怎么真正跑起来。整体架构背景见<a href="/posts/2026-09-25-dual-service-architecture.html">双服务架构</a>。</p>
 
         <h2>在线构建：先把它想成一个状态机</h2>
-        <p>用户在后台点「构建发布」，后端生成一个构建任务，丢给 worker 异步跑。构建是慢操作（拉模板、装依赖、打包、传 CDN），绝不能让请求同步等。任务用状态机管起来，非法跳转直接拒绝——比如构建中不能跳回待构建：</p>
+        <p>用户点「构建发布」，后端生成一个构建任务丢给 worker 异步跑。慢操作绝不同步等。任务用状态机管起来，非法跳转直接拒绝——比如构建中不能跳回待构建：</p>
         <pre><code>const (
     BuildPending = "pending"
     BuildRunning = "running"
     BuildSuccess = "success"
     BuildFailed  = "failed"
 )
-
-type BuildTask struct {
-    ID        uint
-    ProjectID uint
-    Status    string
-    Log       string
-}
 
 func (t *BuildTask) Transit(next string) error {
     allowed := map[string][]string{
@@ -49,35 +42,78 @@ func (t *BuildTask) Transit(next string) error {
     }
     return errIllegalTransition
 }</code></pre>
-        <p>前端轮询任务状态或走 WebSocket 收进度，日志追加进 <code>Log</code>，失败时原样展示，方便定位是模板问题还是依赖问题。</p>
+
+        <h2>worker 怎么真正跑构建：逐行回传日志</h2>
+        <p>状态机只是门面，真正干活的是 worker。它用容器跑构建脚本，逐行读 stdout/stderr 写进日志表或经 WebSocket 推给前端，用户在页面上能看到构建实时滚动：</p>
+        <pre><code>后台点"构建"
+   -&gt; 生成 BuildTask(pending)
+   -&gt; worker 取任务, 占并发槽(running)
+   -&gt; docker run ./build.sh 逐行回日志
+   -&gt; success / failed
+   -&gt; 成功产物传七牛云, 状态置可发布</code></pre>
+        <pre><code>func (w *Worker) runBuild(ctx context.Context, task *BuildTask) error {
+    cmd := exec.CommandContext(ctx, "docker", "run", "--rm", buildImage, "./build.sh")
+    stdout, _ := cmd.StdoutPipe()
+    cmd.Stderr = cmd.Stdout // 合并错误流，一起抓日志
+    if err := cmd.Start(); err != nil {
+        return err
+    }
+    scanner := bufio.NewScanner(stdout)
+    for scanner.Scan() {
+        w.appendLog(task.ID, scanner.Text()) // 写日志表 / WS 推前端
+    }
+    return cmd.Wait()
+}</code></pre>
+
+        <h2>并发控制、取消与僵尸任务兜底</h2>
+        <p>构建很吃资源，worker 用一个带缓冲的信号量限制并发（默认 4 路）；前端点取消就调任务上挂的取消函数。最棘手的是 worker 宕机——任务卡在 <code>running</code> 永远不动，所以要有定时兜底把超时的僵尸任务判成 failed：</p>
+        <pre><code>var sem = make(chan struct{}, 4) // 最多同时跑 4 个构建
+
+func (w *Worker) schedule(task *BuildTask) {
+    sem &lt;- struct{}{}        // 占一个槽
+    defer func() { &lt;-sem }() // 跑完释放
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+    defer cancel()
+    task.refCancel = cancel // 前端点取消时调用
+    w.runBuild(ctx, task)
+}
+
+// 定时兜底：worker 宕机后卡在 running 的任务，判成 failed
+func SweepZombieBuilds() {
+    db.Model(&amp;BuildTask{}).
+        Where("status = ? AND updated_at &lt; ?", "running", time.Now().Add(15*time.Minute)).
+        Update("status", "failed")
+}</code></pre>
 
         <h2>工程生成：模板加参数，不现场写代码</h2>
-        <p>新建工程不是从零生成，而是套预置模板再填参数：项目名、用到的模型、主题色、入口场景。后端把模板拷一份、替换占位符，就成了一个可构建的工程目录。这样工程结构统一，构建脚本不用每个项目单独适配。</p>
+        <p>新建工程不是从零生成，而是套预置模板再填参数：项目名、用到的模型、主题色、入口场景。后端把模板拷一份、替换占位符，就成了一个可构建的工程目录，构建脚本不用每个项目单独适配。</p>
 
-        <h2>模型中心与订单积分</h2>
-        <p>模型中心统一管理接入的各家模型及其单价，构建、对话消耗都按这里的计价走。订单和积分是一条线：用户下单、支付履约（接入了微信、支付宝、Apple、Google）成功后给账户加积分，消耗时再按前面那篇讲的条件扣减。模型单价和积分扣减解耦在同一份计费口径上，不会出现「展示一个价、扣的时候另一个价」。</p>
-
-        <h2>JWT 鉴权：先认出你是谁</h2>
-        <p>后台登录后发 JWT，中间件统一校验、把用户 ID 和角色塞进上下文。这一层只管「身份」，不管「能干嘛」——后者交给 Casbin：</p>
+        <h2>JWT 鉴权：剥掉 Bearer 前缀</h2>
+        <p>后台登录后发 JWT，中间件统一校验。这里有个容易漏的细节：前端一般传 <code>Authorization: Bearer &lt;token&gt;</code>，验签前必须把 <code>Bearer </code> 前缀剥掉，否则带前缀的字符串直接拿去解析必然失败：</p>
         <pre><code>func AuthRequired() gin.HandlerFunc {
     return func(c *gin.Context) {
-        token := c.GetHeader("Authorization")
+        h := c.GetHeader("Authorization")
+        token := strings.TrimPrefix(h, "Bearer ") // 剥前缀，否则验签失败
         claims, err := jwt.Parse(token)
         if err != nil {
             c.AbortWithStatusJSON(401, gin.H{"error": "unauthorized"})
             return
         }
         c.Set("userID", claims.UserID)
-        c.Set("roles", claims.Roles)
         c.Next()
     }
 }</code></pre>
 
-        <h2>Casbin 的 RBAC：权限粒度到菜单和接口</h2>
-        <p>身份认出来后，每个接口再挂一个权限校验中间件。Casbin 的模型是标准的 <code>sub, obj, act</code>：角色（sub）能对哪个资源（obj）做什么动作（act）。obj 既能对应后端接口路径，也能对应前端菜单的资源标识——<strong>菜单和接口用同一份策略</strong>，前端按它渲染可见菜单，后端按它放行请求，两边不会对不上：</p>
-        <pre><code>func RequirePermission(obj, act string) gin.HandlerFunc {
+        <h2>Casbin：策略挂角色，用 g 做用户继承</h2>
+        <p>标准做法是 <strong>sub 存用户 ID，策略只挂角色</strong>，用户和角色的关系用 <code>g</code> 表继承。这样加权限只动角色，不用给每个用户单独配策略：</p>
+        <pre><code>// 策略(p)挂角色；用户-角色继承(g)
+// p, editor, /api/projects, READ
+// p, admin,  /api/build,    *
+// g, alice,  editor   &lt;- 用户 alice 继承 editor 角色
+
+func RequirePermission(obj, act string) gin.HandlerFunc {
     return func(c *gin.Context) {
-        sub := c.GetString("roles")
+        sub := c.GetString("userID") // sub 是用户 ID
         ok, err := enforcer.Enforce(sub, obj, act)
         if err != nil || !ok {
             c.AbortWithStatusJSON(403, gin.H{"error": "forbidden"})
@@ -85,24 +121,18 @@ func (t *BuildTask) Transit(next string) error {
         }
         c.Next()
     }
-}
+}</code></pre>
+        <p>一个用户可以有多条 <code>g</code>（比如同时是 editor 和 admin），Casbin 的 <code>Enforce</code> 会沿角色继承反查，<strong>任一角色命中该接口即放行</strong>。菜单资源与接口用同一套 <code>obj</code>，前端按它渲染可见菜单，后端按它放行请求，两边不会对不上。</p>
 
-// 后台配置权限时，把策略落进 Casbin 规则表
-enforcer.AddPolicy("editor", "/api/projects", "READ")
-enforcer.AddPolicy("admin", "/api/build", "*")</code></pre>
-        <p>这样运营加一个角色，只是往策略表加几行，不用改代码也不用发版。</p>
-
-        <h2>数据看板：只读聚合，别压业务库</h2>
-        <p>看板要看的是用户数、对话量、构建成功数这类聚合指标。这类查询直接打在业务 PostgreSQL 上会拖慢线上写请求，所以统计走预聚合：定时把明细汇总成看板用的小表，后台查的是聚合结果，而不是现场扫全量。</p>
-
-        <h2>被生产环境教出来的细节</h2>
+        <h2>备选方案：在线构建 vs 接 CI</h2>
         <ul>
-          <li>权限千万别只靠前端藏菜单——懂点网络的人直接调接口就能绕过，后端 <code>Enforce</code> 才是真防线；</li>
-          <li>构建任务要带超时和失败重试，worker 崩了任务卡在 running，得有个定时兜底把它判成 failed；</li>
-          <li>发布产物传阿里云 / 七牛云，构建机上不留大文件，磁盘才不会越跑越满。</li>
+          <li><strong>接现成 CI</strong>：要维护外部系统、回传日志链路长，权限和任务状态不好控；</li>
+          <li><strong>自托管 worker + 容器</strong>：任务状态、日志、取消都在自己手里，代价是要自己扛并发和僵尸兜底；</li>
+          <li><strong>云构建服务</strong>：省运维，但构建资源和计费不透明，海外分发场景下我们选自托管。</li>
         </ul>
+        <p>构建产物传七牛云，构建机上不留大文件。配套的订单积分与支付履约见<a href="/posts/2026-09-25-payment-fulfillment.html">支付履约</a>，并发写的一致性兜底见<a href="/posts/2026-09-25-redis-distributed-lock.html">分布式锁</a>。</p>
 
-        <blockquote><p>核心经验：<strong>JWT 负责「你是谁」，Casbin 负责「你能做什么」，菜单和接口共用一份策略</strong>。在线构建本质是个异步状态机，慢操作一律任务化、别同步等；权限要落到后端接口，前端显示只是顺带。B 端后台做到这个粒度，加角色、开菜单才是配置问题，而不是开发任务。</p></blockquote>
+        <blockquote><p>核心经验：<strong>JWT 负责「你是谁」，Casbin 负责「你能做什么」，策略挂角色、用户用 g 继承</strong>。在线构建本质是个异步状态机，慢操作一律任务化，配合信号量并发上限、context 取消和僵尸任务定时兜底；权限必须落到后端接口，前端显示只是顺带。加角色、开菜单因此成了配置问题，而不是开发任务。</p></blockquote>
       </div>
     </article>
     <script src="/assets/js/main.js"></script>

@@ -18,98 +18,100 @@
       </header>
 
       <div class="article-body">
-        <p>写这个多站点市场资讯采集平台时，最开始我把 6 个数据源的任务一股脑塞进同一个 <code>asyncio.Queue</code>，开几十个 worker 一起跑。结果很快被现实教做人：某一个站点限流很严，被打爆后一直返回 429，别的正常站点也跟着排队受连累；想把某个源的并发度从 8 调到 4，还得把整个进程重启。最后我把并发拆成了两层——数据源级和单源内任务级，再加一套不重启的配置热同步。这篇基于真实代码，讲清楚这个模型是怎么搭起来的。</p>
+        <p>写这个多站点市场资讯采集平台时，最开始我把 6 个数据源的任务一股脑塞进同一个 <code>asyncio.Queue</code>，开几十个 worker 一起跑。结果很快被现实教做人：某一个站点限流很严、一直返回 429，别的正常站点也跟着排队受连累；想把某个源的并发度从 8 调到 4，还得把整个进程重启。最后我把并发拆成了全局 + 数据源 + 单源内三层，再加一套不重启的配置热同步。这篇基于真实代码讲清这个模型，其中可靠性兜底见<a href="/posts/2026-10-04-crawler-reliability.html">采集可靠性那篇</a>，对外抓取的安全校验见<a href="/posts/2026-10-04-ssrf-protection.html">SSRF 防护那篇</a>。</p>
 
-        <h2>为什么要拆成"两级"并发</h2>
-        <p>采集器面对的不是一个接口，而是 6 个数据源、5 种页面形态。它们的限速能力、超时、稳定性完全不同。如果只有一层"全局 N 个协程"，就没法对单个源做精细限流，一个慢源会拖住整体吞吐。拆成两级后，职责很清楚：</p>
+        <h2>整体长这样：一张 ASCII 架构图</h2>
+        <p>先把三层关系画出来，后面的代码都对着这张图看：</p>
+        <pre><code>          global_sem  (同时活跃源 &lt;= GLOBAL_ACTIVE_SOURCES)
+         ┌───────────────┴────────────────┐
+      source1                           source2
+     sem_s1 (在途 &lt;= concurrency)      sem_s2 ...
+     /  |  \                             /  |  \
+   w1   w2   w3  ...                   w1   w2  ...
+    │    │    │                         │    │
+     每个源一条有界队列 Queue(maxsize) 反压生产者
+    └─ worker 只负责"取任务、跑 crawl_one"
+    └─ sem_s1 在 crawl_one 内部真正发请求时才占位</code></pre>
+
+        <h2>为什么"每源信号量 + 固定 worker"不冗余</h2>
+        <p>刚拆的时候我也怀疑：既然单源内已经固定开了 N 个 worker，再配一把 <code>Semaphore(N)</code> 不就是重复限制吗？不是，它俩管的不是一回事：</p>
         <ul>
-          <li><strong>第一级，数据源级</strong>：控制同时有多少个数据源在跑，以及每个源对外发起的请求总量，避免某个源被我们自己打挂；</li>
-          <li><strong>第二级，单源内任务级</strong>：在一个源内部，把待抓 URL 放进队列，用固定数量的 worker 并发消费。</li>
+          <li><strong>worker 数量</strong>控制"并发消费队列的协程数"和背压节奏——worker 少，队列消费慢，生产者自然被反压；</li>
+          <li><strong>信号量</strong>兜住单条任务内部的二次 fan-out：抓一个详情页往往要再请求图片、接口、分页，一个任务会扇出好几个子请求；信号量保证无论内部怎么扇，<strong>这个源对外的在途请求总数始终被压在预算内</strong>。</li>
         </ul>
+        <p>所以 worker 决定"同时几条任务在跑"，信号量决定"这些任务加起来最多打出去多少个请求"。两者是正交的。</p>
 
-        <h2>第一级：数据源级信号池，互相不连累</h2>
-        <p>我给每个源配一把独立的信号量 <code>asyncio.Semaphore</code>，它就是这个源对外的"在途请求预算"。无论单源内开多少 worker，真正发请求前都要先拿到这把信号，超出预算的自然排队：</p>
-        <pre><code>async def crawl_one(name: str, cfg: dict, job: dict) -&gt; None:
-    # 单源内再压一层：在途请求数被锁死在 cfg["concurrency"] 以内
-    async with limiters[name]:
-        async with sess.get(job["url"], timeout=CLIENT_TIMEOUT) as resp:
-            if resp.status == 429:
-                await asyncio.sleep(cfg["backoff"])   # 被限流，退避后这条任务还在队列里
-                return
-            await parse_and_save(name, resp)</code></pre>
-        <p>这样一来，A 源再慢、再被限流，也只会占满自己那把信号量，B 源的信号量根本不受影响。<strong>限流是按源隔离的，不是全局一刀切</strong>。</p>
+        <h2>全局信号量：同时活跃的源也得限流</h2>
+        <p>第一级往上再套一层：6 个源如果一启动就全部开抓，瞬间把连接和内存都顶满。我加一把全局信号量控制"同时有几个源在跑"，拿不到的源先排队：</p>
+        <pre><code>GLOBAL_ACTIVE_SOURCES = 2   # 示例：同一时刻最多抓 2 个源
+global_sem = asyncio.Semaphore(GLOBAL_ACTIVE_SOURCES)
 
-        <h2>第二级：单源内 Queue 分发 + worker</h2>
-        <p>每个源内部是一个标准的"生产者—消费者"：生产者把待抓 URL 填进 <code>asyncio.Queue</code>，几个 worker 从队列里取任务干活。队列我设了上限，配合后面的背压：</p>
+async def supervise(name: str, cfg: dict, queue: asyncio.Queue) -&gt; None:
+    async with global_sem:        # 拿不到就在这排队，源之间不再一齐冲出去
+        await run_source(name, cfg, queue)</code></pre>
+
+        <h2>连接池：TCPConnector 把底层连接也限住</h2>
+        <p>信号量管的是协程层面的"在途逻辑请求"，操作系统层面的 TCP 连接池还得单独限。我用 aiohttp 的连接器统一收口，避免连接数失控：</p>
+        <pre><code>connector = aiohttp.TCPConnector(
+    limit=50,              # 全局总在途连接上限
+    limit_per_host=8,      # 单 host 在途连接，与 per-source 信号量对齐
+    ttl_dns_cache=300,     # 缓存 DNS，别每个请求都解析一遍
+)
+sess = aiohttp.ClientSession(connector=connector,
+                             timeout=aiohttp.ClientTimeout(total=10))</code></pre>
+
+        <h2>429/503：有限次指数退避 + jitter，绝不静默丢任务</h2>
+        <p>这是被生产环境狠狠修过的一处。最早我被限流后 <code>sleep 一下然后 return</code>，注释还写着"任务还在队列里"——其实根本不在，任务就这样悄悄蒸发了。正确做法是在 <code>crawl_one</code> 内做<strong>有限次指数退避重试</strong>，带 jitter 避免所有 worker 同时醒过来再打一次；退避用完才把任务放回队尾，而不是吞掉：</p>
+        <pre><code>import random
+
+MAX_RETRIES = 3
+BASE_BACKOFF = 1.0   # 秒，基数 1s -&gt; 1s/2s/4s
+
+async def crawl_one(name: str, cfg: dict, job: dict,
+                   queue: asyncio.Queue) -&gt; None:
+    for attempt in range(MAX_RETRIES + 1):
+        async with limiters[name]:           # 真正发请求才占信号量
+            async with sess.get(job["url"]) as resp:
+                if resp.status in (429, 503):
+                    if attempt == MAX_RETRIES:
+                        # 退避耗尽：放回队尾稍后再来，绝不静默 return
+                        await queue.put(job)
+                        return
+                    # 指数退避 + jitter，错峰醒来
+                    delay = BASE_BACKOFF * (2 ** attempt) + random.uniform(0, 0.5)
+                    await asyncio.sleep(delay)
+                    continue
+                resp.raise_for_status()
+                await parse_and_save(name, resp)
+                return</code></pre>
+        <p>放回队尾不等于无限循环——一条任务反复失败，最终会在 outbox 里累计失败次数并触发熔断进死信，这部分在<a href="/posts/2026-10-04-crawler-reliability.html">看门狗那篇</a>讲。</p>
+
+        <h2>单源内 Queue 分发 + worker</h2>
+        <p>每个源内部是标准的生产者—消费者：生产者把待抓 URL 填进队列，几个 worker 循环取任务。<code>task_done()</code> 必须放在 <code>finally</code> 里，否则任务一抛异常 <code>queue.join()</code> 就永远等下去：</p>
         <pre><code>async def fetch_worker(name: str, cfg: dict, queue: asyncio.Queue) -&gt; None:
     while True:
         job = await queue.get()
         try:
-            if job is None:        # 毒丸：收到就退出，用于缩容和停机
+            if job is None:        # 毒丸：缩容/停机时收到就退出
                 return
-            await crawl_one(name, cfg, job)
+            await crawl_one(name, cfg, job, queue)
         finally:
-            queue.task_done()      # 无论成功失败都要标记，否则 join 永远不返回</code></pre>
-        <p>这里有个血泪细节：<code>task_done()</code> 必须放在 <code>finally</code> 里。任务一旦抛异常却没 <code>task_done</code>，<code>queue.join()</code> 就会永远等下去，整个源卡死。</p>
+            queue.task_done()      # 无论成败都要标记</code></pre>
 
-        <h2>编排：create_task 管 worker，gather 收尾</h2>
-        <p>启动一个源时，我用 <code>create_task</code> 把 worker 都跑起来，生产者灌完队列后 <code>await queue.join()</code> 等所有任务消化完，再发毒丸、用 <code>gather</code> 收尾：</p>
-        <pre><code>async def run_source(name: str, cfg: dict, queue: asyncio.Queue) -&gt; None:
-    workers = [
-        asyncio.create_task(fetch_worker(name, cfg, queue))
-        for _ in range(cfg["concurrency"])
-    ]
-    await fill_queue(name, cfg, queue)     # 生产者：把待抓 URL 塞进去
-    await queue.join()
-    for _ in range(cfg["concurrency"]):
-        await queue.put(None)              # 毒丸：通知每个 worker 退出
-    await asyncio.gather(*workers)</code></pre>
-        <p>为什么用 <code>create_task</code> 而不是直接 <code>gather(crawl_one(...))</code> 一把梭？因为任务是源源不断从队列里来的，worker 要长期存活、循环消费，不是"列出一批任务然后等完"那种一次性场景。</p>
+        <h2>背压与热同步：有界队列 + 不重启改并发</h2>
+        <p>队列设 <code>maxsize=200</code>，满了 <code>put()</code> 自然阻塞生产者，背压白送。改并发度不重启：起一个协程盯配置文件 mtime，变了就重载进共享字典；worker 数量随目标值伸缩——信号量大小改不了，所以扩容靠 <code>create_task</code> 补人、缩容靠多发毒丸让多余 worker 自然退出。完整细节见<a href="/posts/2026-09-25-redis-distributed-lock.html">之前那篇讲并发与锁取舍的文章</a>同类思路。</p>
 
-        <h2>背压：队列有界，别让内存先崩</h2>
-        <p>采集最容易忽略的不是 CPU，是内存。如果队列无界，生产速度远大于消费速度时，待抓任务会在内存里无限堆积。我给每个源的 <code>Queue</code> 设了 <code>maxsize</code>：队列满了，生产者 <code>await queue.put(job)</code> 会自然阻塞，反过来压制抓取节奏。<strong>背压不是外加的，是靠有界队列白送的</strong>。</p>
+        <h2>备选方案与权衡</h2>
         <table>
-          <thead><tr><th>层级</th><th>控制对象</th><th>用什么做</th></tr></thead>
+          <thead><tr><th>我的选择</th><th>备选</th><th>为什么没选</th></tr></thead>
           <tbody>
-            <tr><td>数据源级</td><td>单个源对外的在途请求数</td><td><code>asyncio.Semaphore</code></td></tr>
-            <tr><td>单源内任务级</td><td>worker 数量与队列缓冲</td><td><code>asyncio.Queue(maxsize)</code> + <code>create_task</code></td></tr>
-            <tr><td>全局背压</td><td>内存里堆积的待抓任务</td><td>有界队列反压生产者</td></tr>
+            <tr><td>进程内 Semaphore 限流</td><td>全局限流网关 / 分布式令牌桶</td><td>单进程部署，进程内信号量零依赖、足够；多实例才需要 Redis 令牌桶</td></tr>
+            <tr><td>有界队列反压</td><td>无界队列 + 独立消费者</td><td>无界队列在消费慢时会把内存撑爆，有界队列把节奏反过来压给生产者</td></tr>
+            <tr><td>自管协程池</td><td>Celery / RQ 外部 worker</td><td>采集是常驻长连接流，asyncio 协程比多进程 worker 更省资源；代价是故障恢复得自己写</td></tr>
           </tbody>
         </table>
 
-        <h2>配置热同步：并发度不重启就改</h2>
-        <p>线上最烦的就是改个并发度还要重启进程——重启会丢掉在途任务、还得重新走一遍崩溃恢复。我的做法是起一个独立的协程，定时看配置文件的修改时间，变了就重新加载，把新配置放进一个共享字典：</p>
-        <pre><code>async def config_reloader(state: dict, path: str) -&gt; None:
-    mtime = 0.0
-    while True:
-        await asyncio.sleep(5)
-        try:
-            new_mtime = os.path.getmtime(path)
-        except OSError:
-            continue
-        if new_mtime == mtime:
-            continue
-        mtime = new_mtime
-        with open(path, encoding="utf-8") as f:
-            state["cfg"] = json.load(f)   # 整体替换，下一轮调度读新值</code></pre>
-        <p>worker 不直接读死配置，而是每轮从 <code>state["cfg"]</code> 拿当前值。这样改完配置文件，最多 5 秒生效，进程纹丝不动。</p>
-
-        <h2>被生产环境教出来的细节：信号量大小没法在线改</h2>
-        <p>这里有个坑：<code>asyncio.Semaphore(n)</code> 的 <code>n</code> 一旦创建就改不了，你不能指望"热同步"直接把信号量从 8 调成 4。所以缩容我靠的是 worker 数量——维护一个 worker 集合，目标并发度变小就多发毒丸让多余 worker 自然退出，变大就 <code>create_task</code> 补人：</p>
-        <pre><code>async def managed_pool(name: str, state: dict, queue: asyncio.Queue) -&gt; None:
-    workers = set()
-    while True:
-        target = state["cfg"][name]["concurrency"]
-        while len(workers) &lt; target:           # 扩容
-            t = asyncio.create_task(fetch_worker(name, state["cfg"], queue))
-            workers.add(t)
-            t.add_done_callback(workers.discard)
-        while len(workers) &gt; target:           # 缩容：发毒丸让 worker 跑完自己退
-            await queue.put(None)
-            await asyncio.sleep(0)
-        await asyncio.sleep(2)</code></pre>
-
-        <blockquote><p>核心经验：<strong>并发不是"开越多协程越快"，而是"按数据源隔离预算、用有界队列做背压、让配置在线可调"</strong>。两级并发的本质，是把"对单个目标的礼貌"和"对整体吞吐的追求"解耦——慢源不拖死快源，改配置不打扰在途任务。</p></blockquote>
+        <blockquote><p>核心经验：<strong>并发不是"开越多协程越快"，而是"全局控源数、单源控在途、队列做背压、配置在线可调"</strong>。两层信号量 + worker 不是重复造墙，而是分别兜住"对外礼貌"和"内部扇出"；429 退避必须有上限，退避用完放回队尾而不是吞掉任务——被生产环境教出来的细节，都是血泪。</p></blockquote>
       </div>
     </article>
     <script src="/assets/js/main.js"></script>
