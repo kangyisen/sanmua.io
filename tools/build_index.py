@@ -92,6 +92,9 @@ def collect_md():
     for name in os.listdir(POSTS_DIR):
         if not name.endswith(".md"):
             continue
+        if name.startswith("_"):
+            # 下划线开头（如 _template.md）为模板/草稿，不纳入索引
+            continue
         path = os.path.join(POSTS_DIR, name)
         with io.open(path, encoding="utf-8") as f:
             text = f.read()
