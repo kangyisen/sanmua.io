@@ -1,0 +1,49 @@
+name: Markdown 索引自动生成
+
+# 当 posts/ 下的 Markdown 文章（或生成脚本、旧索引）变化时，
+# 重新扫描 frontmatter 生成 data/posts.json，有变化则自动提交回 666。
+# 这样作者只需提交 .md 文件，首页索引无需手工维护。
+
+on:
+  push:
+    branches: [666]
+    paths:
+      - "posts/*.md"
+      - "tools/build_index.py"
+      - "data/posts.legacy.json"
+      - ".github/workflows/markdown-index.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: markdown-index-666
+  cancel-in-progress: false
+
+jobs:
+  build-index:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: 扫描 Markdown 生成 posts.json
+        run: python tools/build_index.py
+
+      - name: 有变化则提交并推送
+        run: |
+          if git diff --quiet -- data/posts.json; then
+            echo "posts.json 无变化，跳过。"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/posts.json
+          git commit -m "chore: 自动更新 posts.json 索引（Markdown 扫描） [skip ci]"
+          git push origin 666

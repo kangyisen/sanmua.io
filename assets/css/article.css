@@ -229,6 +229,8 @@ body.typora-export {
 
 /* 图片 */
 #write img {
+  max-width: 100% !important;
+  height: auto !important;
   border-radius: var(--radius-md) !important;
   margin: 1.2em auto !important;
   box-shadow: var(--shadow-sm) !important;
@@ -285,4 +287,73 @@ body.typora-export {
   .site-nav__inner {
     line-height: 1.75;
   }
+}
+
+/* ============================================================
+   highlight.js 代码高亮（posts/view.html 渲染 Markdown 时使用）
+   颜色复用上方 --code-* 变量，与 CodeMirror 主题一致。
+   因 #write pre code 用了 !important，这里也用 !important。
+   ============================================================ */
+#write pre code.hljs {
+  padding: 0 !important;
+  background: transparent !important;
+}
+#write .hljs-comment,
+#write .hljs-quote {
+  color: var(--code-comment) !important;
+  font-style: italic;
+}
+#write .hljs-keyword,
+#write .hljs-selector-tag,
+#write .hljs-doctag,
+#write .hljs-template-tag {
+  color: var(--code-keyword) !important;
+}
+#write .hljs-built_in,
+#write .hljs-literal,
+#write .hljs-type,
+#write .hljs-class .hljs-title,
+#write .hljs-title.class_ {
+  color: var(--code-type) !important;
+}
+#write .hljs-title,
+#write .hljs-title.function_,
+#write .hljs-function .hljs-title,
+#write .hljs-section {
+  color: var(--code-function) !important;
+}
+#write .hljs-string,
+#write .hljs-regexp,
+#write .hljs-attr,
+#write .hljs-attribute,
+#write .hljs-addition,
+#write .hljs-meta-string {
+  color: var(--code-string) !important;
+}
+#write .hljs-number,
+#write .hljs-symbol,
+#write .hljs-bullet,
+#write .hljs-variable,
+#write .hljs-template-variable,
+#write .hljs-link {
+  color: var(--code-number) !important;
+}
+#write .hljs-name,
+#write .hljs-selector-class,
+#write .hljs-selector-id,
+#write .hljs-selector-attr,
+#write .hljs-selector-pseudo {
+  color: var(--code-function) !important;
+}
+#write .hljs-meta {
+  color: var(--code-comment) !important;
+}
+#write .hljs-deletion {
+  color: var(--code-keyword) !important;
+}
+#write .hljs-emphasis {
+  font-style: italic;
+}
+#write .hljs-strong {
+  font-weight: 700;
 }

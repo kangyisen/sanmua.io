@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>文章 · sanmua</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <script src="/assets/js/theme.js"></script>
+    <link rel="stylesheet" href="/assets/css/main.css" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+  </head>
+  <body>
+    <article class="prose">
+      <header class="prose__header">
+        <a class="prose__back" href="/">&larr; 返回首页</a>
+        <h1 class="prose__title" id="viewTitle">正在打开文章…</h1>
+        <div class="prose__meta" id="viewMeta"></div>
+      </header>
+
+      <div id="write"></div>
+    </article>
+
+    <script src="/assets/js/marked.min.js"></script>
+    <script src="/assets/js/highlight.min.js"></script>
+    <script>
+      (function () {
+        var titleEl = document.getElementById("viewTitle");
+        var metaEl = document.getElementById("viewMeta");
+        var writeEl = document.getElementById("write");
+
+        function showError(message) {
+          titleEl.textContent = "文章打不开";
+          writeEl.innerHTML =
+            '<p>' + message + "</p><p>返回<a href=\"/\">首页</a>再看看。</p>";
+        }
+
+        function unquote(value) {
+          value = value.trim();
+          if (
+            value.length >= 2 &&
+            value.charAt(0) === value.charAt(value.length - 1) &&
+            (value.charAt(0) === '"' || value.charAt(0) === "'")
+          ) {
+            value = value.slice(1, -1);
+          }
+          return value.trim();
+        }
+
+        function parseTags(raw) {
+          raw = raw.trim();
+          if (raw.charAt(0) === "[" && raw.charAt(raw.length - 1) === "]") {
+            raw = raw.slice(1, -1);
+          }
+          return raw
+            .split(/[,，]/)
+            .map(function (t) {
+              return unquote(t);
+            })
+            .filter(Boolean);
+        }
+
+        // 解析顶部 frontmatter，返回 { fields, body }
+        function splitMarkdown(text) {
+          var m = /^\u0020*---\u0020*\n([\s\S]*?)\n---\u0020*(?:\n|$)/.exec(text);
+          if (!m) return null;
+          var lines = m[1].split("\n");
+          var fields = {};
+          var lastKey = null;
+          lines.forEach(function (line) {
+            var bm = /^\u0020*-\u0020+(.*)$/.exec(line);
+            if (bm && lastKey) {
+              fields[lastKey] = fields[lastKey] || [];
+              fields[lastKey].push(unquote(bm[1]));
+              return;
+            }
+            var km = /^([A-Za-z_][A-Za-z0-9_-]*)\u0020*:\u0020*(.*)$/.exec(line);
+            if (!km) return;
+            var key = km[1];
+            var value = km[2];
+            lastKey = key;
+            fields[key] = key === "tags" ? parseTags(value) : unquote(value);
+          });
+          return { fields: fields, body: text.slice(m[0].length) };
+        }
+
+        // 让 marked 输出的代码块经过 highlight.js 高亮
+        function renderCode(a, b) {
+          var code, lang;
+          if (a && typeof a === "object") {
+            code = a.text;
+            lang = a.lang || "";
+          } else {
+            code = a;
+            lang = ((b || "").match(/\S*/) || [""])[0];
+          }
+          var html;
+          if (lang && hljs.getLanguage(lang)) {
+            html = hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
+          } else {
+            html = hljs.highlightAuto(code).value;
+          }
+          return (
+            '<pre><code class="hljs language-' +
+            lang +
+            '">' +
+            html +
+            "</code></pre>"
+          );
+        }
+
+        marked.use({ gfm: true, renderer: { code: renderCode } });
+
+        var f = new URLSearchParams(location.search).get("f") || "";
+        if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(f) || f.indexOf("..") !== -1) {
+          showError("文章参数不合法。");
+          return;
+        }
+
+        fetch("/posts/" + encodeURIComponent(f) + ".md")
+          .then(function (response) {
+            if (!response.ok) throw new Error("HTTP " + response.status);
+            return response.text();
+          })
+          .then(function (text) {
+            var parsed = splitMarkdown(text);
+            if (!parsed || !parsed.fields.title) {
+              showError("Markdown 缺少标题或 frontmatter。");
+              return;
+            }
+            var fields = parsed.fields;
+            document.title = fields.title + " · sanmua";
+            titleEl.textContent = fields.title;
+
+            var meta = document.createElement("span");
+            meta.textContent = fields.date || "";
+            metaEl.appendChild(meta);
+            (fields.tags || []).forEach(function (tag) {
+              var s = document.createElement("span");
+              s.textContent = tag;
+              metaEl.appendChild(s);
+            });
+
+            writeEl.innerHTML = marked.parse(parsed.body.trim());
+
+            // 预览辅助：?scroll=N 渲染后滚动到指定位置，便于分段截图/打印。
+            var scrollY = new URLSearchParams(location.search).get("scroll");
+            if (scrollY) {
+              window.scrollTo(0, parseInt(scrollY, 10) || 0);
+            }
+          })
+          .catch(function () {
+            showError("没有读到这篇文章，可能文件名不对。");
+          });
+      })();
+    </script>
+    <script src="/assets/js/main.js"></script>
+  </body>
+</html>

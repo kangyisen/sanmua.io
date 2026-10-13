@@ -1,5 +1,16 @@
 [
   {
+    "title": "博客改造：只写 Markdown，剩下的交给脚本与 Actions",
+    "href": "/posts/view.html?f=2026-10-13-markdown-publishing",
+    "date": "2026-10-13",
+    "tags": [
+      "编程",
+      "设计"
+    ],
+    "excerpt": "新增一篇文章不再需要手写 HTML：一个 .md 文件、一个通用 viewer、自动生成的 posts.json，外加一条 push 时自动更新索引的 Actions。",
+    "isNew": true
+  },
+  {
     "title": "多供应商 AI 绘图网关：统一抽象与错误码字典",
     "href": "/posts/2026-10-13-ai-drawing-gateway.html",
     "date": "2026-10-13",
