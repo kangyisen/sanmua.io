@@ -4,6 +4,9 @@
 
 ## 发布步骤
 
+> 最快的方式：直接复制模板 `posts/_template.md`（里面已含 frontmatter、各种排版示例
+> 和使用注释），改成新文件名即可，照着填就行。以下是从零开始的完整步骤。
+
 1. 在 `posts/` 下新建一个文件，命名为 `YYYY-MM-DD-英文slug.md`，例如
    `posts/2026-10-20-my-new-post.md`。
 2. 文件顶部写 frontmatter（标题、日期、标签、摘要），下面写正文：
