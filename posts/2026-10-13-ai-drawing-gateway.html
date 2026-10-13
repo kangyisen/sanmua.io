@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>多供应商 AI 绘图网关：统一抽象与错误码字典 · sanmua</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <script src="/assets/js/theme.js"></script>
+    <link rel="stylesheet" href="/assets/css/main.css" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+  </head>
+  <body>
+    <article class="prose">
+      <header class="prose__header">
+        <a class="prose__back" href="/">&larr; 返回首页</a>
+        <h1 class="prose__title">多供应商 AI 绘图网关：统一抽象与错误码字典</h1>
+        <div class="prose__meta"><span>2026-10-13</span><span>Go</span><span>AI</span><span>架构</span></div>
+      </header>
+
+      <div class="article-body">
+        <p>「一秒修图」后端基于 gin-vue-admin 二开，一个 App 背后挂着十多家 AI 绘图供应商：即梦/火山方舟、腾讯混元、可灵 Kling、旷视 Face++、阿里百炼、StepFun、LiblibAI、ComfyUI、OpenRouter，还有一套本地模型兜底。每一家的入参结构、鉴权方式、轮询节奏、错误码体系都不一样。这篇复盘 <code>server/service/business/toolbox/</code> 目录里真实存在的那层「统一网关」：它怎么用一套入参屏蔽厂商差异，又怎么把十几种错误码翻译成用户能看懂的一句话。</p>
+
+        <h2>领域模型：ToolBox 是能力，Template 是一次具体调用</h2>
+        <p>后台里有两张表：<code>b_tool_box</code>（工具/工具箱）和 <code>b_tool_template</code>（模板）。ToolBox 描述一类能力（比如「人像融合」「试衣」），它身上挂着三件关键配置：<code>AiModel</code>（走哪家供应商）、<code>ToolType</code>（能力类型约定值）、<code>BoxParams</code>（厂商请求 JSON 模板）。Template 则是某一个具体玩法（某个发型模板、某个滤镜模板），它有自己的 <code>Params</code>、定价 <code>UsagePoints</code>、状态、<code>parentId</code>（子模板），以及 <code>userId=0</code> 表示公共模板。</p>
+        <p>二者通过 <code>tool_id</code> 关联，代码里用一个嵌入结构体一次性查出来：</p>
+        <pre><code>type BoxAndTemplate struct {
+    business.ToolBox
+    business.Template
+}
+
+func GetTemplateAndBoxByTemplateId(templateId datatype.SfID) (result BoxAndTemplate, err error) {
+    db := db().Table(business.TableToolTemplate).
+        Select(fmt.Sprintf("%s.*,%s.*", business.TableToolBox, business.TableToolTemplate)).
+        Joins(fmt.Sprintf("JOIN %s ON %s.tool_id = %s.tool_id",
+            business.TableToolBox, business.TableToolBox, business.TableToolTemplate)).
+        Where(fmt.Sprintf("%s.template_id = ?", business.TableToolTemplate), templateId)</code></pre>
+        <p>也就是说，C 端用户只传一个 <code>templateId</code>，网关就能 JOIN 出「这次调用走哪家供应商、用什么参数模板、收多少积分」。<code>generate.go</code> 顶部那串常量就是 ToolType 的约定值：<code>klingAI = 25</code>、<code>kuangshiAIFilter = 32</code>、<code>shiyiPlus = 33</code>（百炼试衣 Plus）、<code>wanImage = 174</code>（万相 2.7）、<code>volcEngine1 = 120</code> 等。</p>
+
+        <h2>统一入参 GenerateForm：把十家厂商揉成一个 map</h2>
+        <p>对外的表单是 <code>NewPictureForm</code>（App/H5 用），内部立刻被改写成统一的 <code>GenerateForm</code>：</p>
+        <pre><code>type GenerateForm struct {
+    trace                  *observability.Trace
+    ctx                    context.Context
+    OnProgress             func(GenerationProgress) `json:"-"`
+    UserId                 datatype.SfID            `json:"-"`
+    IsAsync                bool                     `json:"isAsync"`
+    TemplateId             datatype.SfID            `json:"templateId" binding:"required,min=1"`
+    Sources                map[string]interface{}   `json:"sources"` // 原图/原视频地址
+    IsApp                  bool                     `json:"isApp"`
+    Params                 map[string]interface{}   `json:"params"`  // 用户侧参数
+    // ...
+}</code></pre>
+        <p><code>mergeMaps</code> 里还有一处很能说明「抹平差异」的细节：不同厂商模板对图片占位符命名不一致，代码专门做了 <code>{picture}</code> 与 <code>{image_urls}</code> 的双向别名兼容，递归替换时再把占位符整体替换成七牛私链地址。视频场景则走 <code>IsAsync=true</code>，由 <code>common.RunAsyncTask</code> 包一层异步任务，<code>gen</code> 的逻辑原样复用，只是先返回一个 <code>requestId</code> 给前端轮询。</p>
+        <p>关键在于：<strong>网关不定义每一家厂商的强类型 DTO</strong>。模板 JSON 里埋着 <code>{picture}</code>、<code>{image_urls}</code> 这样的占位符，<code>mergeMaps</code> 把用户上传的图片地址、用户参数递归替换进去，得到一个纯粹的 <code>map[string]interface{}</code>，再交给具体厂商实现：</p>
+        <pre><code>type Drawing interface {
+    Generate(*BoxAndTemplate, map[string]interface{}) (drawingResponse, error)
+}
+
+// gen() 里：
+generator, err := newDrawing(template.ToolBox.AiModel)
+if contextual, ok := generator.(interface {
+    GenerateContext(context.Context, map[string]interface{}) (drawingResponse, error)
+}); ok {
+    resp, err = contextual.GenerateContext(form.ctx, providerParams)
+} else {
+    resp, err = generator.Generate(&amp;template, providerParams)
+}</code></pre>
+        <p>注意那个可选的 <code>GenerateContext</code> 接口：需要 SSE 进度上报、需要传 ctx 的供应商就实现它，老实现直接满足基础 <code>Generate</code> 即可——这是 Go 里用「接口升级而非改签名」做演进的典型写法。</p>
+
+        <h2>分发：newDrawing 一张 switch 表</h2>
+        <p>供应商选择完全由模板上的 <code>AiModel</code> 枚举决定，<code>drawing.go</code> 里的工厂函数就是一张清晰的路由表：</p>
+        <pre><code>func newDrawing(aiModel enums.AIModel) (Drawing, error) {
+    switch aiModel {
+    case enums.AIModelKeLing:
+        return newDrawingKling()
+    case enums.AIModelKeKuangShi:
+        return newDrawingKuangShi()
+    case enums.AIModelBaiLian:
+        return newDrawingAliBaiLian()
+    case enums.AIModelComfyUi:
+        return newDrawingComfyUi()
+    case enums.AIModelVolcEngine:
+        return newDrawingVolcEngine()
+    case enums.AIModelVolcDocToPic, enums.AIModelVolcEditPic:
+        return newDrawingVolc2()
+    case enums.AIModelStepFun:
+        if global.GVA_CONFIG.Business.LocalModelAI.PreferLocalForStepFun {
+            return newDrawingLocalModel() // 本地模型优先
+        }
+        return newDrawingStepFun()
+    case enums.AIModelHunyuanImage:
+        return &amp;DrawingHunyuan{}, nil
+    case enums.AIModelOpenRouterImage:
+        return newDrawingOpenRouterImage()
+    default:
+        return newDrawingLibLib() // 兜底默认 LiblibAI
+    }
+}</code></pre>
+        <p>新增一家供应商 = 实现 <code>Drawing</code> 接口 + 在这张 switch 加一个 case，网关主流程 <code>Generate / gen</code> 一行都不用改。<code>drawing_hunyuan.go</code> 就是个好例子：它的 <code>DrawingHunyuan.Generate</code> 先 <code>normalizeLocalInput</code> 把统一 map 归一化成 <code>modelImageInput</code>，再 POST 到混元的 <code>hunyuan-image/v35-generation</code> 端点。</p>
+
+        <h2>vendorError：把上游错误包成统一信封</h2>
+        <p>十家厂商的错误形态五花八门：可灵返回数字 <code>code</code>，百炼返回字符串码 <code>InvalidURL</code>，旷视返回 <code>IMAGE_FILE_TOO_LARGE:xxx</code>，火山方舟返回 OpenAI 风格的 <code>error.code</code>。网关用一个统一结构体收口：</p>
+        <pre><code>type vendorError struct {
+    vendor     enums.AIModel // 路由后实际供应商
+    code       string        // 厂商错误码（数值码统一转字符串）
+    httpStatus int           // HTTP 状态码（如有）
+    raw        string        // 厂商返回的原始错误信息 / body
+}
+
+func newVendorError(code string, httpStatus int, raw string) *vendorError {
+    return &amp;vendorError{code: code, httpStatus: httpStatus, raw: raw}
+}</code></pre>
+        <p>各厂商实现拿到上游失败时，一律返回这个类型。可灵的调用处就是：</p>
+        <pre><code>if resp.Code != 0 || resp.Data.TaskStatus == "failed" {
+    return images, newVendorError(
+        itoa(resp.Code), response.StatusCode,
+        firstNonEmpty(resp.Data.TaskStatusMsg, resp.Message, string(resBytes)))
+}</code></pre>
+        <p>混元则给了两个语义化的内部码：<code>newVendorError("content_filter", status, "混元内容审核拒绝")</code> 和 <code>newVendorError("hunyuan_http_error", status, ...)</code>。</p>
+
+        <h2>错误码字典：每家一张表，外加两层兜底</h2>
+        <p><code>classifyError</code> 是错误分类的中枢，先按供应商查专属字典：</p>
+        <pre><code>switch vendor {
+case enums.AIModelKeLing:
+    meta, ok = klingCodeTable[code]
+case enums.AIModelKeKuangShi:
+    meta, ok = matchFacePP(code, raw)
+case enums.AIModelBaiLian, enums.AIModelVisionAli:
+    meta, ok = bailianCodeTable[code]
+case enums.AIModelVolcEngine:
+    meta, ok = volcVisualCodeTable[code]
+case enums.AIModelVolcDocToPic, enums.AIModelVolcEditPic:
+    meta, ok = arkCodeTable[code]
+case enums.AIModelStepFun:
+    meta, ok = matchStepFun(code, httpStatus, raw)
+case enums.AIModelLibLib:
+    meta, ok = matchLibLib(code, raw)
+}
+// 查不到再兜底：
+if m, matched := matchByKeyword(raw); matched {
+    return m
+}
+return classifyByHttpStatus(httpStatus, raw)</code></pre>
+        <p>字典本身是真实维护的。可灵表里 <code>"1301"</code> 是「触发平台内容安全策略」（用户可见话术），<code>"1101"</code> 是账户欠费，<code>"1302"/"1303"</code> 是限流；百炼表里 <code>"InvalidPerson"</code>（图里没人或多人）、<code>"Arrearage"</code>（欠费）、<code>"Throttling"</code>（限流）各有归属；火山方舟 <code>arkCodeTable</code> 里光敏感类就拆成 <code>SensitiveContentDetected</code>、<code>InputImageSensitiveContentDetected</code>、<code>OutputImageSensitiveContentDetected</code> 三种；StepFun 还额外维护一张 HTTP 状态码表（<code>402</code> 余额不足、<code>451</code> 内容未过审）。</p>
+        <p>查不到精确码时，<code>matchByKeyword</code> 先扫原始文本里的「敏感/违规/nsfw/未检测到人脸/too large/欠费/rate limit/timeout」等关键词；再不行就用 <code>classifyByHttpStatus</code> 按 401/403/429/5xx/4xx 粗分一层。</p>
+        <p>分类结果落到枚举 <code>ErrorLogCategory</code> 上，只有三类是「可直接给用户看的」：</p>
+        <pre><code>case ErrorCategoryUserInput, ErrorCategoryContentRisk, ErrorCategoryUserAccount:
+    return true // UserVisible()
+default:
+    return false // 鉴权/欠费/限流/第三方内部/平台内部 → 只入后台日志</code></pre>
+
+        <h2>异步落库与话术转换</h2>
+        <p>所有错误最终在 <code>recordAndTransformError</code> 收口：用 <code>errors.As(err, &amp;ve)</code> 把厂商错误捞出来，分类后决定话术——用户可见类返回 <code>meta.userMsg</code>（如「未检测到清晰人脸或人物主体，请更换图片后重试」），其余一律回退到统一话术 <code>unifiedUserMessage = "图片生成失败，请稍后重试；如多次仍失败，请联系管理员处理。"</code>，绝不把厂商的鉴权细节、内部栈暴露给前端。</p>
+        <pre><code>func recordAndTransformError(...) error {
+    var ve *vendorError
+    if !errors.As(err, &amp;ve) {
+        return err // 平台自身话术本就安全，原样返回
+    }
+    meta := classifyError(vendor, ve.code, ve.httpStatus, ve.raw)
+    userMsg := unifiedUserMessage
+    if meta.category.UserVisible() &amp;&amp; meta.userMsg != "" {
+        userMsg = meta.userMsg
+    }
+    saveErrorLog(template, form, params, vendor, code, httpStatus, raw, meta, userVisible, userMsg)
+    return newUserError(userMsg)
+}</code></pre>
+        <p>日志异步写入表 <code>b_toolbox_error_log</code>（模型 <code>business.ToolboxErrorLog</code>），一条记录同时保存 <code>VendorCode</code>、<code>HttpStatus</code>、<code>Category</code>、完整 <code>RawError</code>（截断 8000 字）、<code>PossibleReason</code>、最终 <code>UserMessage</code> 和脱敏后的 <code>RequestParams</code>。写库用 goroutine + recover 包裹，落库失败只打日志，绝不影响主流程和积分结算：</p>
+        <pre><code>go func() {
+    defer func() {
+        if r := recover(); r != nil {
+            log().Errorf("save toolbox error log panic: %+v", r)
+        }
+    }()
+    if e := db().Create(&amp;record).Error; e != nil {
+        log().Errorf("save toolbox error log failed: %+v", e)
+    }
+}()</code></pre>
+
+        <h2>权衡</h2>
+        <ul>
+          <li><strong>放弃强类型，换来接入速度</strong>：统一用 <code>map[string]interface{}</code> + 占位符模板，新厂商几天就能接完，但参数错误要到运行期、甚至到厂商返回时才暴露——所以错误字典才必须这么细。</li>
+          <li><strong>错误分类是「运营资产」而非纯技术问题</strong>：欠费、限流、鉴权这些对用户毫无意义的错误被统一话术兜住，既不泄露厂商配置，也避免用户白折腾；后台却能按分类快速定位是哪家又欠费了。</li>
+          <li><strong>字典 + 关键词 + HTTP 状态码三层兜底</strong>，是因为厂商错误码文档永远跟不上实际返回。宁可粗分一层进日志，也不能让一个没见过的错误码把用户直接打懵。</li>
+        </ul>
+
+        <blockquote><p>网关的价值不在「能调十家模型」，而在把十家的混乱挡在用户看不见的地方：一套 Template 入口、一个 map 出参、一张 switch 路由表、一本错误码字典，再加一句永远体面的兜底话术——这才是多供应商架构真正的护城河。</p></blockquote>
+      </div>
+    </article>
+    <script src="/assets/js/main.js"></script>
+  </body>
+</html>

@@ -1,5 +1,101 @@
 [
   {
+    "title": "多供应商 AI 绘图网关：统一抽象与错误码字典",
+    "href": "/posts/2026-10-13-ai-drawing-gateway.html",
+    "date": "2026-10-13",
+    "tags": [
+      "Go",
+      "AI",
+      "架构"
+    ],
+    "excerpt": "一套 Template 入口、一个 map 出参、一张 switch 路由表、一本十家厂商错误码字典，外加一句永远体面的兜底话术。",
+    "isNew": true
+  },
+  {
+    "title": "本地模型调度与云端故障转接",
+    "href": "/posts/2026-10-13-local-model-scheduler.html",
+    "date": "2026-10-13",
+    "tags": [
+      "Go",
+      "AI",
+      "架构"
+    ],
+    "excerpt": "本地 GPU 不是更强的云：用站点冷却、半开熔断和“异步任务只投一次”，把“服务挂了/请求不支持/已投出的账单”三件事拆开记账。",
+    "isNew": true
+  },
+  {
+    "title": "AI 内容审核：多供应商可配置路由",
+    "href": "/posts/2026-10-13-content-audit-routing.html",
+    "date": "2026-10-13",
+    "tags": [
+      "Go",
+      "AI",
+      "安全"
+    ],
+    "excerpt": "百度/阿里云图/阿里云文/火山方舟四家审核器收敛成同一个 Auditor 接口，后台可配、按权限收口的模型故障转移链，审核抖动时放行而不打挂修图主流程。",
+    "isNew": true
+  },
+  {
+    "title": "卡密兑换系统：加密码、短信登录与公开兑换",
+    "href": "/posts/2026-10-13-card-redemption.html",
+    "date": "2026-10-13",
+    "tags": [
+      "Go",
+      "安全",
+      "设计"
+    ],
+    "excerpt": "明文卡密只在生成与导出的瞬间存在，库里躺着的是 SHA-256 指纹和 AES-GCM 密文，兑换靠指纹定位、事务兜底幂等。",
+    "isNew": true
+  },
+  {
+    "title": "设计工作台：SSE 流式生成、异步消息与预设体系",
+    "href": "/posts/2026-10-13-design-studio.html",
+    "date": "2026-10-13",
+    "tags": [
+      "Go",
+      "AI",
+      "设计"
+    ],
+    "excerpt": "从 notifyChannel 空 struct 通知、WatchSession 的 snapshot/progress/done/reconnect 协议，到部分结果落库与预设乐观锁，拆解设计室如何让长 AI 任务在断连后可恢复。",
+    "isNew": true
+  },
+  {
+    "title": "形象照/证件照：服务端 HTML 合成与尺寸适配",
+    "href": "/posts/2026-10-13-profile-photo-composite.html",
+    "date": "2026-10-13",
+    "tags": [
+      "Go",
+      "设计",
+      "编程"
+    ],
+    "excerpt": "服务端用 embed.FS 单遍拼出拍摄引导页：从 pages.go 选布局、html.go 灌数据，到 Seedream 像素上限校验与一寸二寸真实规格表。",
+    "isNew": true
+  },
+  {
+    "title": "支付与订单：多渠道回调、Apple IAP 与订阅",
+    "href": "/posts/2026-10-13-payment-order-iap.html",
+    "date": "2026-10-13",
+    "tags": [
+      "Go",
+      "支付",
+      "架构"
+    ],
+    "excerpt": "一个 Payer 接口统一微信/支付宝/苹果三渠道下单，回调验签各做各的，幂等靠数据库条件更新，苹果侧用 JWS 证书链与 originalTransactionId 映射收敛订阅和匿名购买。",
+    "isNew": true
+  },
+  {
+    "title": "CNB CI/CD：分环境部署、菜单同步与备份回滚",
+    "href": "/posts/2026-10-13-cnb-cicd.html",
+    "date": "2026-10-13",
+    "tags": [
+      "Go",
+      "Docker",
+      "架构"
+    ],
+    "excerpt": "拆开 .cnb.yml：develop 按 web/server 改动分流部署、自动开 MR、menu-sync 同步菜单快照、flock 加锁后精确备份，健康检查失败由 EXIT trap 自动回滚。",
+    "isNew": true
+  },
+  {
     "title": "条件-效果规则引擎：AI 互动叙事的配置化设计",
     "href": "/posts/2026-10-04-narrative-rule-engine.html",
     "date": "2026-10-04",

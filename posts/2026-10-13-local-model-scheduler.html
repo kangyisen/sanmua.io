@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>本地模型调度与云端故障转接 · sanmua</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <script src="/assets/js/theme.js"></script>
+    <link rel="stylesheet" href="/assets/css/main.css" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+  </head>
+  <body>
+    <article class="prose">
+      <header class="prose__header">
+        <a class="prose__back" href="/">&larr; 返回首页</a>
+        <h1 class="prose__title">本地模型调度与云端故障转接</h1>
+        <div class="prose__meta"><span>2026-10-13</span><span>Go</span><span>AI</span><span>架构</span></div>
+      </header>
+
+      <div class="article-body">
+        <h2>背景：云端生图不是永远可靠</h2>
+        <p>「一秒修图」（部署包名 aizaotu）的出图链路一开始全部跑在云厂商 API 上：阿里百炼的 qwen-image、腾讯混元的 hy-image-v3.5-preview、阶跃星辰的 step-image-edit-2。这些接口按量计费，公网一抖动、限流一触发（429）或返回 5xx，用户那边就是一张图都出不来。于是我们把 Qwen 图像模型部署进自己的 GPU 机器，通过内网穿透暴露成两个站点（d103、fip），让它在「能力匹配」时优先承接流量，云端则退居故障兜底。</p>
+        <p>相关代码都在 <code>server/service/business/toolbox/</code> 下：<code>drawing_local_scheduler.go</code>（站点调度）、<code>drawing_local_task.go</code>（任务协议）、<code>drawing_local_generation.go</code>（生成主链路）、<code>drawing_local_failover.go</code>（转接判定与熔断），配置长在 <code>business.local-model</code> 这一节：</p>
+        <pre><code># config.yaml
+business:
+  local-model:
+    primarySite: "d103"
+    generationTimeoutSeconds: 180
+    pollIntervalMillis: 2000
+    fallbackEnabled: true
+    sites:
+      fip: "https://fip.cpolar.top"
+      d103: "https://d103.cpolar.top"</code></pre>
+
+        <h2>为什么要本地兜底，而不是直接换云厂商</h2>
+        <p>本地 GPU 的边际成本几乎为零，但它的能力是云端的<strong>子集</strong>：本地是图生图异步任务协议，文生图「协议未指定」直接拒收；最多 3 张参考图；尺寸要求 256–1536、32 像素对齐、总面积不超过 1536x1024。<code>localCapabilityReason</code> 就是这道门槛的实现：</p>
+        <pre><code>func localCapabilityReason(in modelImageInput) string {
+    if len(in.Images) == 0 {
+        return "local text-to-image protocol not specified"
+    }
+    if len(in.Images) &gt; 3 {
+        return "local supports at most 3 reference images"
+    }
+    // 尺寸：宽高 256–1536、均为 32 的倍数、宽*高 &lt;= 1536*1024
+    return ""
+}</code></pre>
+        <p>这个设计决定了整个架构的走向：本地不是「更好的云」，而是一个<strong>有明确能力边界的廉价通道</strong>。能力不匹配时绝不动用本地的熔断状态，直接走云端——否则「本地不支持文生图」会被误判成「本地服务挂了」，白白打开熔断。</p>
+
+        <h2>真实实现：站点登记与轻量调度器</h2>
+        <p><code>DrawingLocalModel</code> 持有配置、混元备用配置、一个老路径用的熔断器和一个全局共享的站点调度器（<code>sharedLocalSites</code>）。调度器本身很轻：每个站点一个 <code>localSiteState</code>，记录正在飞的请求数、故障冷却截止时间、半开探测标记和版本号：</p>
+        <pre><code>type localSiteState struct {
+    active       int
+    blockedUntil time.Time
+    probe        bool
+    epoch        uint64
+}
+
+// reserve 在网络 I/O 之前预约一个站点：选 in-flight 最少者，并列按 sequence 轮转；
+// 健康站点容量打满时在 changed channel 上等待，而不是立刻故障转移。
+func (p *localSiteScheduler) reserve(ctx context.Context, sites map[string]string,
+    preferred string, excluded map[string]bool, limit int) (*localSiteLease, error)</code></pre>
+        <p>预约到的 <code>*localSiteLease</code> 在请求结束时 <code>release(failed, cooldown)</code>：失败就把站点打入冷却（默认 30 秒），成功且冷却已过则解封；<code>sync.Once</code> 保证一次预约只释放一次，防止重复减计数：</p>
+        <pre><code>func (l *localSiteLease) release(failed bool, cooldown time.Duration) {
+    l.once.Do(func() {
+        s := l.pool.states[l.key]
+        s.active--
+        if failed {
+            if cooldown &lt;= 0 { cooldown = 30 * time.Second }
+            s.epoch++
+            s.blockedUntil = time.Now().Add(cooldown)
+        }
+        l.pool.signal() // 唤醒在 changed 上等待的预约者
+    })
+}</code></pre>
+        <p>调度主循环 <code>generateScheduledLocal</code> 的关键纪律写在注释里：只有<strong>提交前</strong>的失败才允许换站点（把该站点加入 excluded 重试）；一旦任务已经 POST 出去（<code>trace.submissionStarted == true</code>），歧义失败直接上抛，绝不拿着同一个 job id 去另一台机器上轮询——那会造成重复扣费和跨站轮询。</p>
+
+        <h2>任务协议：异步队列与状态机</h2>
+        <p>本地模型是异步任务协议：POST 接单，轮询取结果。任务结构体 <code>LocalModelTask</code> 严格遵循对方的 <code>qwen_query_task.py</code> 语义——任务归创建它的站点所有，换站 404 不能触发重投：</p>
+        <pre><code>type LocalModelTask struct {
+    Site       string                 `json:"site"`
+    JobID      string                 `json:"job_id"`
+    HTTPStatus int                    `json:"http_status"`
+    Status     string                 `json:"status"`
+    URL        string                 `json:"url,omitempty"`
+    Body       map[string]interface{} `json:"body,omitempty"`
+}
+// GET /api/jobs/{id}：只查询、不创建；状态机 queued / running / failed / cancelled / completed</code></pre>
+        <p>一次完整生图在 <code>generateLocalAt</code> 里是固定三步：先 <code>GET /api/health</code>（2 秒超时）确认站点就绪，再 <code>POST /api/jobs</code> 提交任务（期望 202 Accepted，从 body 里取 <code>id</code>），最后按 <code>pollIntervalMillis</code>（默认 2000ms）轮询直到终态：</p>
+        <pre><code>switch state {
+case "queued":
+    continue                       // 仍在本地 GPU 队列里
+case "running":
+    if runningAt.IsZero() { runningAt = time.Now() }
+    continue
+case "completed":
+    // 校验图片 URL 必须是 https，否则视为协议异常
+    return drawingResponse{Images: []string{image}}, nil
+case "failed", "cancelled":
+    return drawingResponse{}, localResponseError(500, body, nil)
+}</code></pre>
+        <p>整个生成被包在 <code>GenerationTimeoutSeconds</code>（默认 180 秒）的 child context 里；超时退出时错误信息特意写明「已提交本地任务等待超时，任务可能继续运行」——因为服务端任务可能还活着，这个信息会参与后面的转接判定，避免误转。</p>
+
+        <h2>云端故障转接：什么算「可转接」的失败</h2>
+        <p>主入口 <code>GenerateContext</code> 的分支逻辑很清晰：<code>FallbackEnabled</code> 关闭时能力不符直接报错；能力不符（比如 5 张参考图）直接调 <code>backup</code>，即腾讯混元 <code>generateHunyuan</code>（hy-image-v3.5-preview）；否则先打本地，失败且可转接才转云端，并在日志里打 <code>model_fallback from=local to=hunyuan</code>。</p>
+        <p>「可转接」的判定是整个设计最讲究的部分——<code>localFailureCanTransfer</code> 区分了「服务挂了」和「请求被拒」：</p>
+        <pre><code>func localFailureCanTransfer(err error) bool {
+    if err == nil || errors.Is(err, context.Canceled) { return false }
+    var ve *vendorError
+    if errors.As(err, &amp;ve) {
+        // 内容安全 / 用户输入 / 鉴权类拒绝不是可用性故障，即使被代理包成 5xx 也不转接
+        if meta, ok := matchByKeyword(ve.raw); ok &amp;&amp;
+            (meta.category == enums.ErrorCategoryContentRisk ||
+             meta.category == enums.ErrorCategoryUserInput ||
+             meta.category == enums.ErrorCategoryVendorAuth) {
+            return false
+        }
+        return ve.httpStatus == 408 || ve.httpStatus == 429 ||
+            ve.httpStatus &gt;= 500 &amp;&amp; ve.httpStatus &lt;= 599
+    }
+    return errors.Is(err, ErrLocalModelUnavailable) ||
+        errors.Is(err, context.DeadlineExceeded)
+}
+</code></pre>
+        <p>老路径上还有一个全局熔断器 <code>localModelFailover</code>：<code>acquire</code> / <code>finish</code> 一对，失败进入 30 秒冷却，冷却后用 <code>probe</code> 半开探测试探一次，<code>epoch</code> 版本号防止「上一代请求的迟到结果」误关新熔断。它的 <code>run</code> 对每个 provider 最多调用一次，计费与审计刻意留在函数外面——同步熔断器绝不和一笔未完成的账单赛跑。</p>
+
+        <h2>参数差异与离线模板迁移</h2>
+        <p>同一个修图模板，走百炼云端和走本地，参数长得完全不一样：云端 qwen-image 是 messages 风格，参考图是 content 块里的 <code>{image: url}</code>，<code>prepareQwenImageParams</code> 还要把 <code>{image: [url, url]}</code> 数组展开成每张图一个块；本地 <code>/api/jobs</code> 则是平铺的 <code>image_urls / prompt / seed / width / height</code>，没有 messages、没有 <code>cfg_scale</code>、没有 <code>steps</code>。</p>
+        <p>存量数据库里有一批渠道为阶跃（ai_model 12/13）的老模板，迁移由 <code>scripts/migrate_stepfun_templates_local_qwen.py</code> 这个离线脚本完成，而不是运行时临时改写：</p>
+        <pre><code>OLD_MODEL = 'step-image-edit-2'
+NEW_MODEL = 'local-qwen'   # 后端适配器标签，不是上游模型版本
+LEGACY_CHANNELS = (12, 13)
+LOCAL_CHANNEL = 15
+REMOVED_KEYS = ('cfg_scale', 'steps')  # 本地适配器早已忽略这两个字段
+
+# 改 b_toolbox.ai_model 12/13 -&gt; 15；box_params / params 中
+# model -&gt; local-qwen，URI_PATH -&gt; /api/jobs，删掉 cfg_scale/steps。
+# 默认 dry-run；--apply 必须提供计划 sha256 与备份目录，
+# FOR UPDATE 行锁 + 每 100 条 CASE 批量更新 + ROW_COUNT 逐行校验 + 生成 rollback.sql。</code></pre>
+        <p>配套的 <code>TestLocalQwenTemplateMigrationPreservesInput</code> 守住了一条底线：迁移前后 <code>normalizeLocalInput</code> 的输出必须 <code>reflect.DeepEqual</code>，且发往上游的 payload 里绝不泄漏 <code>model / URI_PATH / cfg_scale / steps</code> 这些「给人看的标签」。也就是说，数据库里的显示标签和真正发往 GPU 的请求是完全解耦的——标签随便改，实际入参一毫米都不能动。</p>
+        <p>运维侧还有一个独立入口 <code>cmd/local_model/main.go</code>，支持 <code>health / query / generate</code> 三种模式，可以脱离主服务单独巡检站点、追单个 job id 或手动跑一次完整链路。</p>
+
+        <h2>取舍小结</h2>
+        <ul>
+          <li><strong>能力边界先于故障判断</strong>：不支持的请求直接走云端，不碰本地熔断，避免误判。</li>
+          <li><strong>异步任务只投一次</strong>：202 之后绝不重复提交、绝不跨站轮询，歧义失败宁可上抛也不重复扣费。</li>
+          <li><strong>两层保护</strong>：站点级冷却（blockedUntil）管「哪台机器歇一会」，全局熔断器管「整条本地通道歇多久」，半开探测自动恢复。</li>
+          <li><strong>迁移离线化</strong>：DB 脚本 + 等价性测试，标签与请求解耦，可 dry-run、可回滚。</li>
+        </ul>
+        <blockquote><p>兜底系统最难的从来不是「挂了之后切过去」，而是冷静地区分：这是服务真挂了、请求本就不被支持、还是一笔已经投出去的账单。本地 GPU 调度器用站点冷却、熔断器和只投一次的异步协议，把这三件事拆开记账——便宜的算力才能真正变成用户手里稳出的图。</p></blockquote>
+      </div>
+    </article>
+    <script src="/assets/js/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI 内容审核：多供应商可配置路由 · sanmua</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <script src="/assets/js/theme.js"></script>
+    <link rel="stylesheet" href="/assets/css/main.css" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+  </head>
+  <body>
+    <article class="prose">
+      <header class="prose__header">
+        <a class="prose__back" href="/">&larr; 返回首页</a>
+        <h1 class="prose__title">AI 内容审核：多供应商可配置路由</h1>
+        <div class="prose__meta"><span>2026-10-13</span><span>Go</span><span>AI</span><span>安全</span></div>
+      </header>
+
+      <div class="article-body">
+        <p>「一秒修图」是个 AI 修图 App，用户要上传参考图、填生图提示词、拿生成图——这三类内容都得过内容安全这道闸。项目先后接了<strong>百度内容审核、阿里云图片审核增强版、阿里云文本审核增强版、火山方舟（Ark）大模型审核</strong>四家，代码全部收在 <code>server/service/business/audit/</code> 这一个包里。供应商会换、模型会换、审核口径会调，但调用修图主流程的业务代码一行都不想动——于是有了这篇要讲的统一审核器抽象，以及一套后台可配置的模型故障转移路由。</p>
+
+        <h2>四类供应商，收敛成一个 Auditor 接口</h2>
+        <p>包入口 <code>auditor.go</code> 先把四家供应商登记成四个字符串常量，再用同一个接口约束它们：</p>
+        <pre><code>const (
+	AuditorBaidu      = "baidu"
+	AuditorDeepSeek   = "deepseek"
+	AuditorAliyun     = "aliyun"
+	AuditorAliyunText = "aliyun-text"
+)
+
+type AuditResponse struct {
+	Status enums.AuditStatus `json:"conclusionType"` // 1合规 2不合规 3疑似 4审核失败
+	Remark string            `json:"remark"`          // 审核备注
+}
+
+type Auditor interface {
+	AuditContent(content string) (AuditResponse, error)
+	AuditImage(url string)      (AuditResponse, error)
+	IsEnable() bool
+}
+
+func GetAuditor(auditorType string) (Auditor, error) {
+	switch auditorType {
+	case AuditorBaidu:        return getBaiduClient()
+	case AuditorDeepSeek:     return getDeepSeekClient()
+	case AuditorAliyun:       return getAliyunImageClient()
+	case AuditorAliyunText:   return getAliyunTextClient()
+	default:                  return nil, errors.New("invalid auditor type")
+	}
+}</code></pre>
+        <p>内部状态枚举 <code>enums.AuditStatus</code> 有六档：<code>Pending</code>（待审核/未开启）、<code>Reject</code>（拒绝）、<code>Pass</code>（通过）、<code>Faild</code>（审核失败）、<code>Suspect</code>（疑似）。四家供应商各有各的报文：百度返回 <code>ConclusionType</code> 1/2/3/4，阿里云图片返回 <code>RiskLevel</code> high/medium/low/none，阿里云文本返回 <code>reason.riskLevel</code>，Ark 大模型只吐固定 JSON——每一家的转换函数都把原始报文映射到这同一套枚举上。比如百度的 <code>toAuditResponse()</code>：</p>
+        <pre><code>switch r.ConclusionType {
+case 1: resp.Status = enums.AuditStatusPass
+case 2: resp.Status = enums.AuditStatusReject
+case 3: resp.Status = enums.AuditStatusSuspect
+case 4: resp.Status = enums.AuditStatusFaild
+}</code></pre>
+        <p>接口里同时塞了 <code>AuditContent</code> 和 <code>AuditImage</code> 两个方法，不是因为每家都能干两件事，而是让「越界」变成显式空实现：阿里云图像审核器遇到文本请求，直接返回 Pending 放行，而不是真去调一次图片接口：</p>
+        <pre><code>// 阿里云图像审核器只看图，文本不处理
+func (a *AliyunImageAuditor) AuditContent(content string) (AuditResponse, error) {
+	return AuditResponse{Status: enums.AuditStatusPending,
+		Remark: "阿里云审核器不处理文本"}, nil
+}
+
+// 文本审核默认走阿里云 TextModeration；
+// 生图提示词这个场景单独切换到 Ark（DeepSeek 类型名保留兼容）
+func AuditContent(content string) (AuditResponse, error) {
+	return AuditContentWithAuditor(content, AuditorAliyunText)
+}</code></pre>
+        <p>图片侧更直接：<code>AuditImage(url)</code> 写死走 <code>AuditorAliyun</code>，因为上传图、生成图统一换成了阿里云图片审核增强版（<code>ImageBatchModeration</code>，接入点 <code>green-cip.cn-shanghai.aliyuncs.com</code>）；high→Reject、medium→Suspect、low/none→Pass。base64 图片（阶跃星辰这类模型直接吐 base64 而非 URL）则先 <code>DescribeUploadToken</code> 拿临时 STS 凭证，传到绿网托管 OSS（仅存 30 分钟）再审核，不占业务 OSS。</p>
+
+        <h2>文本归一化：先本地防变形，再上云</h2>
+        <p>云端词库和大模型都防不住用户玩变形：<code>小-孩-抽-烟</code>（符号分隔）、<code>小hai抽yan</code>（拼音混写）实测全被放行。于是 <code>text_normalize.go</code> 在调云端审核之前加了一道本地防护。第一步是归一化：</p>
+        <pre><code>func normalizeCensorText(s string) string {
+	nfkced := norm.NFKC.String(s) // 全角→半角、兼容字符折叠
+	var b strings.Builder
+	for _, r := range nfkced {
+		switch {
+		case unicode.Is(unicode.Han, r), unicode.IsLetter(r), unicode.IsDigit(r):
+			b.WriteRune(unicode.ToLower(r))
+		default: // 空格、标点、符号（-_*~，、｜等）一律去除
+		}
+	}
+	return b.String()
+}
+
+// "小-孩-抽-烟" → "小孩抽烟"；"小hai抽yan" → "xiaohaichouyan"</code></pre>
+        <p>第二步是拼音流：汉字逐个转无声调拼音（go-pinyin 的 <code>LazyPinyin</code>），字母数字原样保留。命中词表用 <code>&amp;</code> 连接多段组合词，语义对齐阿里云自定义词库——各段都出现才算命中：</p>
+        <pre><code>var defaultLocalCensorWords = []string{
+	"小孩&amp;抽烟", "小孩&amp;吸烟", "孩子&amp;喝酒", "儿童&amp;香烟",
+	"未成年&amp;抽烟", "未成年人&amp;喝酒", "小女孩&amp;抽烟",
+	"援交&amp;联系方式", "援交&amp;兼职", "小姐&amp;援交",
+}
+
+parts := strings.Split(word, "&amp;")
+// 汉字维度：各段均在归一化文本中出现
+for _, p := range parts {
+	if !strings.Contains(normalized, p) { allHitText = false; break }
+}
+// 拼音维度：仅多段组合词参与，规避同音单词误拦（如"圆角/援交"）
+if len(parts) &gt; 1 { /* 逐段做拼音流包含匹配 */ }</code></pre>
+        <p>这套词表在 <code>config.yaml</code> 的 <code>aliyun-text-censor.local-words</code> 可整体覆盖。阿里云文本审核器的 <code>AuditContent</code> 里，归一化文本一旦命中本地词表，直接返回 Reject 拦截，连云端请求都不发。</p>
+
+        <h2>可配置路由：不是多模型投票，是故障转移链</h2>
+        <p>Ark 大模型审核最麻烦的不是调通，而是<strong>模型本身会下线、会限流、会换版本</strong>。所以 <code>text_route.go</code> 设计了一条有序故障转移链，配置存在 <code>b_setting</code> 表里（<code>config_key = INNER_CONFIG_AI_TEXT_CENSOR_ROUTE</code>），后台可改：</p>
+        <pre><code>const (
+	textRouteKey       = "INNER_CONFIG_AI_TEXT_CENSOR_ROUTE"
+	maxTextRouteModels = 8
+	textRouteBudget    = 60 * time.Second // 整条链总预算
+)
+
+type TextAuditRoute struct {
+	Models         []string `json:"models"`
+	TimeoutSeconds int      `json:"timeoutSeconds"` // 单模型超时，校验范围 3~30 秒
+}</code></pre>
+        <p><code>GetTextAuditRoute</code> 的取值优先级是：<strong>数据库路由配置 &gt; YAML 里的 <code>deep-seek-censor.model</code> 单模型 &gt; 空</strong>。保存时做校验：模型数 1~8 个、单模型超时 3~30 秒、模型 ID 必须匹配 <code>^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$</code> 且不重复。真正执行路由的是 <code>runTextAuditRoute</code>：</p>
+        <pre><code>for _, id := range route.Models {
+	if ctx.Err() != nil { break }
+	attemptCtx, cancel := context.WithTimeout(ctx,
+		time.Duration(route.TimeoutSeconds)*time.Second)
+	response, err := call(attemptCtx, id)
+	cancel()
+	// 通过 / 判定违规都是"有效结论"，立即停止路由；
+	// 只有调用失败、超时或响应无法解析，才顺移到下一模型
+	if err == nil &amp;&amp; (response.Status == enums.AuditStatusPass ||
+		response.Status == enums.AuditStatusReject) {
+		return response, result, nil
+	}
+	// 记录 attempts：model / outcome(pass|reject|error) / elapsedMs
+}
+return AuditResponse{Status: enums.AuditStatusFaild,
+		Remark: ErrTextAuditUnavailable.Error()}, result, ErrTextAuditUnavailable</code></pre>
+        <p>注意它<strong>不是投票</strong>：注释里写得很明白，"A valid rejection is final"——某个模型判定违规，这个结论就是终局，不会再问第二个模型；只有当模型调不通、超时、返回空或 JSON 解析失败时，才消耗下一个模型的预算。整条链 60 秒总预算兜底，全部失败才返回「AI文本审核服务暂时不可用，请稍后重试」。模型列表本身也不用手填，<code>ark_models.go</code> 的 <code>ListArkTextModels</code> 直接带 API Key 请求 Ark 的 <code>/models</code> 目录，按输入输出 modality 过滤出文本对话模型，后台下拉选择即可。</p>
+
+        <h2>这条路由，后台谁能改？</h2>
+        <p>能切换审核模型，等于能松绑风控——这种接口绝不能挂在普通 JWT 鉴权后面。<code>text_route_permissions.go</code> 的 <code>EnsureTextAuditRoutePermissions</code> 在 Casbin 初始化之前跑一次：角色白名单固定为超管 <code>888</code>，再从 <code>sys_authority_menus</code> 联表 <code>sys_base_menus</code>（菜单名 <code>aiCensor</code>）捞出已有 AI 审核菜单的角色，其余一律不给：</p>
+        <pre><code>roles := []string{"888"} // 超管 + 已分配 aiCensor 菜单的角色
+apis := []struct{ path, method, description string }{
+	{"/aiTextCensor/route", "GET",  "查看 AI 文本审核模型路由"},
+	{"/aiTextCensor/route", "PUT",  "设置 AI 文本审核模型路由"},
+	{"/aiTextCensor/models", "GET", "读取火山方舟文本模型"},
+	{"/aiTextCensor/test",   "POST", "测试 AI 文本审核模型路由"},
+}
+// FirstOrCreate sys_api，再向 casbin_rule 补 p 策略；已存在则不重复插入</code></pre>
+
+        <h2>多图并发审核，聚合时只认「最严重」</h2>
+        <p>一次修图往往要同时审输入图、中间图、输出图好几张。<code>AuditImages(urls ...string)</code> 用 <code>sync.WaitGroup</code> 每图起一个 goroutine，按下标写回结果切片，并发跑完再聚合：</p>
+        <pre><code>results := make([]AuditResponse, len(urls))
+var wg sync.WaitGroup
+for i, url := range urls {
+	if url == "" { continue }
+	wg.Add(1)
+	go func(idx int, u string) {
+		defer wg.Done()
+		resp, err := AuditImage(u)
+		if err != nil {
+			// 审核服务异常不阻断主流程，仅记日志
+			log().Errorf("审核服务异常，放行不阻断。url=%s, err=%v", u, err)
+			return // results[idx] 保持零值，不参与聚合
+		}
+		results[idx] = resp
+	}(i, url)
+}
+wg.Wait()
+// 先扫一轮找 high(Reject)，再扫一轮找 medium(Suspect)，否则 Pass
+for _, r := range results {
+	if r.Status == enums.AuditStatusReject { return enums.AuditStatusReject, r.Remark }
+}
+for _, r := range results {
+	if r.Status == enums.AuditStatusSuspect { return enums.AuditStatusSuspect, r.Remark }
+}
+return enums.AuditStatusPass, ""</code></pre>
+        <p>聚合是两遍扫描：任意一张 high 就整体 Reject，没有 high 再看有没有 medium（Suspect），否则 Pass。业务侧拿到结论自己决定处置——输入图 Reject 直接拦截，生成图 Suspect 转人工复核。</p>
+
+        <h2>为什么审核服务挂了，不阻断修图主流程</h2>
+        <p>这套抽象里最反直觉、但最关键的一个取舍是：<strong>审核是风控旁路，不是交易主流程</strong>。对照代码里的几处降级分支：</p>
+        <pre><code>// 1) 配置里 enable=false：返回 Pending（待审核）而非错误，调用方视为放行
+if !a.IsEnable() {
+	return AuditResponse{Status: enums.AuditStatusPending,
+		Remark: "图片审核未开启"}, nil
+}
+
+// 2) 审核器未配置凭证：返回 Faild + 错误，由调用方放行
+auditor, err := GetAuditor(auditorType)
+if err != nil {
+	return AuditResponse{Status: enums.AuditStatusFaild,
+		Remark: "文本审核服务未配置"}, err
+}</code></pre>
+        <p>单图调用抛错时（goroutine 里 err 分支只记日志、不写结果）、整条模型路由全部失败时（<code>ErrTextAuditUnavailable</code>），最终落到业务侧的都是「放行 + 日志留痕」，而不是让用户的修图请求 500。这个选择的账是这么算的：审核服务是外部依赖，一定会抖动——限流、超时、供应商事故、凭证过期；如果让它的不可用直接打挂主流程，用户会因为「审核恰好坏了」而白白消耗算力和等待，而风险侧真正要拦的违规内容，在「本地变形防护词表 + 开启时的正常审核」两层下仍有兜底。风控的目标是<strong>拦违规</strong>，不是<strong>证明自己尽力了</strong>。</p>
+
+        <blockquote><p>四家供应商、两种模态、一条可后台配置的故障转移链，最后都收敛成同一个 <code>Auditor</code> 接口和六个状态枚举——业务代码只管问一句「这图/这话能不能过」，至于今天用百度还是阿里云、主模型挂了切哪个备用、审核服务自己又抖动了，全在这层抽象内部消化。好的安全中间件不是让流程变重，而是让主流程根本感觉不到它存在。</p></blockquote>
+      </div>
+    </article>
+    <script src="/assets/js/main.js"></script>
+  </body>
+</html>

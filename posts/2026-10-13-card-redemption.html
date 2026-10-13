@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>卡密兑换系统：加密码、短信登录与公开兑换 · sanmua</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <script src="/assets/js/theme.js"></script>
+    <link rel="stylesheet" href="/assets/css/main.css" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+  </head>
+  <body>
+    <article class="prose">
+      <header class="prose__header">
+        <a class="prose__back" href="/">&larr; 返回首页</a>
+        <h1 class="prose__title">卡密兑换系统：加密码、短信登录与公开兑换</h1>
+        <div class="prose__meta"><span>2026-10-13</span><span>Go</span><span>安全</span><span>设计</span></div>
+      </header>
+
+      <div class="article-body">
+        <p>「一秒修图」的会员和积分，除了 App 内支付，还有一条重要的运营通路：卖卡密。市场活动、渠道分销、线下发券，都需要一批批可以打印成卡片、私下转给用户的兑换码。这篇复盘后端 <code>service/business/card/</code> 这套自研卡密系统——它要解决的核心矛盾是：<strong>卡密是钱，但它会经过管理员、导出文件、第三方渠道好几道手，任何一道漏了明文都是事故</strong>。</p>
+
+        <h2>为什么不自接第三方券码、也不直接存明文</h2>
+        <p>第一反应往往是「买个券码 SaaS」或「库里存明文 code 就行」。前者把用户权益结算的命脉交给外部；后者最致命——后台列表接口、数据库备份、慢查询日志，任何一个口子都会把全部未兑换卡密泄露，而卡密泄露等于直接丢钱。</p>
+        <p>我们最终定的原则是三条：<strong>明文卡密只在生成和导出的瞬间存在</strong>；库里同时存一份不可逆指纹（用于兑换查找）和一份 AES-GCM 密文（仅管理员导出时还原）；兑换入口是独立的 Web 站，登录态与 App 的 JWT/设备体系物理隔离。</p>
+
+        <h2>兑换码本身：32 位十六进制，带四个分组</h2>
+        <p>一张卡的明文 code 由 16 个随机字节的十六进制大写串组成，切成四段展示（<code>card.go</code>）：</p>
+        <pre><code>raw, _ := randomHex(16)        // 32 个十六进制字符
+raw = strings.ToUpper(raw)
+code := raw[:8] + "-" + raw[8:16] + "-" + raw[16:24] + "-" + raw[24:]
+row := business.RedeemCard{
+    ID:       id,
+    CodeHash: Hash(raw),        // SHA-256(raw)，唯一索引，兑换时按它查
+    CodeHint: raw[:4] + "…" + raw[28:],
+    Status:   "unused",
+    // ...
+}
+row.CodeCiphertext, err = encryptCode(aead, row, code)</code></pre>
+        <p>用户输入时人会随手塞空格、连字符，所以兑换前先 <code>Normalize</code>：统一大写、剥掉 <code>-</code> 和所有空白，再算哈希去库里查——查找只认哈希，永不做明文模糊匹配。库里那张表 <code>b_redeem_card</code> 上，<code>CodeHash</code> 是唯一索引，<code>CodeCiphertext</code> 是 <code>json:"-"</code> 的 text 字段，列表/公开接口永远不会把它序列化出去。</p>
+
+        <h2>加密：独立密钥的 AES-256-GCM，AAD 绑定到卡</h2>
+        <p>密钥绝不复用 App 的 AES/JWT 密钥。<code>codeCipher</code> 先读环境变量 <code>CARD_CODE_ENCRYPTION_KEY</code>（Base64 编码的 32 字节），没有则读 <code>CARD_CODE_KEY_FILE</code> 指向的文件（默认 <code>resource/card_code.key</code>）：</p>
+        <pre><code>encoded := strings.TrimSpace(os.Getenv("CARD_CODE_ENCRYPTION_KEY"))
+// ... 否则读 key 文件；文件不存在且需要创建时，
+// 先检查是否已有密文卡密，有则拒绝静默换一把新钥匙
+if count &gt; 0 {
+    return nil, errors.New("卡密加密密钥缺失，请恢复原密钥后再生成")
+}
+key, err := base64.StdEncoding.DecodeString(encoded)
+if err != nil || len(key) != 32 {
+    return nil, errors.New("卡密加密密钥格式错误，需配置32字节密钥的Base64值")
+}
+block, _ := aes.NewCipher(key)
+return cipher.NewGCM(block)   // AES-256-GCM</code></pre>
+        <p>加解密的设计有两个细节值得抄：一是 <strong>GCM 的 Additional Data 绑死了这张卡自己</strong>——密文一旦被挪到别的行上，解出来的 AAD 校验直接失败；二是解密后还要再过一道 <code>Hash(Normalize(plain)) == card.CodeHash</code> 的双保险：</p>
+        <pre><code>func codeAAD(card business.RedeemCard) []byte {
+    return []byte(fmt.Sprintf("yimiao-card-v1:%d:%s", card.ID, card.CodeHash))
+}
+func encryptCode(aead, card, code string) (string, error) {
+    nonce := make([]byte, aead.NonceSize())
+    rand.Read(nonce)
+    sealed := aead.Seal(nonce, nonce, []byte(code), codeAAD(card))
+    return "v1:" + base64.RawURLEncoding.EncodeToString(sealed), nil
+}
+// 解密：拆出 nonce → aead.Open → 再校验明文哈希 == CodeHash
+// 任一不过都返回 "卡密解密校验失败"</code></pre>
+        <p>密文统一带 <code>v1:</code> 前缀，nonce 直接拼在密文前面一起存。新建密钥文件时走「临时文件 + hard link」的原子发布，权限 0600，多进程并发抢写也只会有一个 winner。</p>
+
+        <h2>模板与批量生成：权益快照，不信前端</h2>
+        <p>卡密不是每张单独配的，先建模板。模板模型 <code>b_card_template</code> 内嵌一份 <code>CardBenefit</code> 权益快照（Name / Level / Days / MemberType / PointsMode / Points / BonusPoints），外加 <code>Kind</code>（member / points / permanent）和 <code>DurationDays</code>：</p>
+        <pre><code>type CardBenefit struct {
+    Name        string         // 卡面权益描述，不可变快照
+    PackageID   datatype.SfID  // 发行时绑定的本地套餐
+    Level       enums.MemberLevel
+    Days        uint
+    PointsMode  string         // normal：一次性永久积分；member：走月会员规则
+    Points      int64
+    BonusPoints int64
+}</code></pre>
+        <p>生成卡时管理员只选来源（本地会员套餐 / 积分套餐 / 自定义模板），<code>resolveTemplate</code> 每次都回头读绑定的本地套餐，<strong>前端传过来的 level、积分、类型一律不信</strong>。会员模板不允许手写会员积分，必须挂一个 <code>MemberPackage</code>；模板禁用了套餐也不能启用。生成在一个事务里完成，每批 1～500 张，来源行加 <code>SHARE</code> 锁，最后 <code>CreateInBatches(rows, 100)</code>：</p>
+        <pre><code>rows := make([]business.RedeemCard, 0, req.Count)
+for i := 0; i &lt; req.Count; i++ {
+    raw, _ := randomHex(16)
+    // ... 拼成 code，写 CodeHash / CodeHint / 密文
+    rows = append(rows, row)
+}
+tx.CreateInBatches(rows, 100)</code></pre>
+
+        <h2>导出：单独权限、逐张解密、只记 ID 的审计</h2>
+        <p>导出是唯一能还原明文的接口，所以它和列表接口彻底分开、要单独的 Casbin 权限。每次最多 1000 张，默认只导出可用卡（已用/禁用/过期自动跳过）。导出时逐张调 <code>decryptCode</code> 还原明文——历史卡如果只存过摘要没存密文，会明确标注「历史卡密仅保存摘要，无法还原完整卡密」，而不是假装成功。审计日志 <code>b_card_export_log</code> 只记录管理员、批次号、卡 ID 列表和张数，<strong>明文卡密和密钥一个字都不进日志</strong>。</p>
+
+        <h2>登录：短信验证码 + 独立 Web 会话</h2>
+        <p>兑换站不发 App token。短信登录两步：<code>SendLoginSMS</code> 发码前过人机校验（Web 端强制 <code>IsApple=false</code>，复用全局短信通道和冷却），<code>LoginSMS</code> 验码时对用户行加 <code>UPDATE</code> 锁，保证同一验证码并发只能消费一次。成功后走 <code>issueSession</code>：</p>
+        <pre><code>raw, _ := randomHex(32)
+token := "cw_" + raw                 // 67 字符，24 小时有效
+session := business.CardWebSession{
+    TokenHash: Hash(token),          // 库里只存 SHA-256，不存明文
+    UserID:    userID,
+    ExpiresAt: time.Now().Add(24 * time.Hour),
+}
+db.Create(&amp;session)</code></pre>
+        <p>会话表 <code>b_card_web_session</code> 是独立不透明的：校验时按 <code>token_hash + 未过期</code> 查，再顺带确认账号仍启用。它<strong>永远不会被 App 的 JWT / 设备会话体系接受</strong>，反过来 App token 也进不了兑换站——两套登录态零交集。</p>
+
+        <h2>公开兑换：按用户 ID 兑，三层限流 + 事务幂等</h2>
+        <p>最开放的接口是「凭用户 ID + 卡密，把权益充到那个账号上」，不需要登录。它的安全全靠限流和事务。Handler 层三道闸门：每 IP 每分钟 60 次、每 IP+目标用户每分钟 15 次、兑前先 <code>LookupUser</code> 确认收款人存在且可用（只回昵称头像，不泄敏感信息）：</p>
+        <pre><code>svc.Limit(c.DB, "redeem-ip:"+ip, 60, time.Minute)
+id, _ := svc.ParseUserID(req.UserID)   // ^[1-9][0-9]{0,18}$
+svc.LookupUser(c.DB, id)               // 先确认收款人
+svc.Limit(c.DB, "redeem-target-ip:"+ip+":"+id.String(), 15, time.Minute)
+receipt, err := svc.Redeem(c.DB, id, req.Code)</code></pre>
+        <p>真正的兑换在 <code>Redeem</code> 一个事务里：按 <code>code_hash</code> 加 <code>UPDATE</code> 行锁，然后状态校验一条不落——已兑换且是同一个人则直接返回原回执（幂等重试，绝不二次发权益）；状态不是 unused 直接拒；过期拒；校验权益快照；发会员/加积分；最后才落 <code>status/redeemed_by/redeemed_at</code>：</p>
+        <pre><code>tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+    Where("code_hash = ?", Hash(code)).First(&amp;card)
+// 幂等：同一账号重复提交，返回原回执，不重复发放
+if card.Status == "redeemed" &amp;&amp; card.RedeemedBy == userID { return nil }
+if card.Status != "unused"      { return ErrCardUnavailable }
+if card.ExpiresAt != nil &amp;&amp; !card.ExpiresAt.After(now) { return ErrCardExpired }
+// 发会员 GrantCardMembership / 加积分 ApplyPointsChange ...
+card.Status = "redeemed"</code></pre>
+        <p>限流本身也不依赖 Redis——<code>Limit</code> 是 MySQL 里的固定窗口计数器（表 <code>b_card_rate_limit</code>），多实例天然共享，DB 出错时 fail-closed。匿名接口只白名单返回那几个业务错误，其余一律包装成「服务暂时不可用」，内部细节不外泄。</p>
+
+        <h2>权衡</h2>
+        <ul>
+          <li><strong>密钥即生命线</strong>：AES-GCM 密文能还原的前提是密钥不丢，所以宁可在密钥缺失时拒绝生成、报错提示恢复，也绝不静默换一把新钥匙让存量卡密作废。</li>
+          <li><strong>固定窗口计数器换简单</strong>：没用 Redis，限流精度是「窗口边界可能放过一倍」，但换来多实例一致、少一个依赖，对登录和兑换这种低频接口足够。</li>
+          <li><strong>双份存储有成本</strong>：哈希+密文意味着导出必须逐张解密、要密钥在线，但把「数据库泄露」和「卡密泄露」彻底切开了——拖库拿不到明文，列表接口也拿不到密文。</li>
+        </ul>
+
+        <blockquote><p>卡密系统的本质不是「生成一串随机码」，而是<strong>把一张会流转到无数人手里的有价凭证，拆成库外的明文和库里的指纹+密文两半</strong>：明文只活在生成与导出两个受控瞬间，兑换靠指纹定位、靠事务兜底幂等。钱能发出去，也绝不漏出去。</p></blockquote>
+      </div>
+    </article>
+    <script src="/assets/js/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CNB CI/CD：分环境部署、菜单同步与备份回滚 · sanmua</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <script src="/assets/js/theme.js"></script>
+    <link rel="stylesheet" href="/assets/css/main.css" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+  </head>
+  <body>
+    <article class="prose">
+      <header class="prose__header">
+        <a class="prose__back" href="/">&larr; 返回首页</a>
+        <h1 class="prose__title">CNB CI/CD：分环境部署、菜单同步与备份回滚</h1>
+        <div class="prose__meta"><span>2026-10-13</span><span>Go</span><span>Docker</span><span>架构</span></div>
+      </header>
+
+      <div class="article-body">
+        <h2>背景：两套环境，一条流水线</h2>
+        <p>「一秒修图」后台基于 gin-vue-admin（GVA）二开，但线上并不是 GVA 那套 docker-compose 全家桶。真实拓扑是分裂的：日常开发跑在 <code>123.57.222.105</code>，前端是 1Panel 管理的静态站点（目录 <code>/opt/1panel/www/sites/123.57.222.105/index</code>），后端是一个叫 <code>aizaotu-server</code> 的 Docker 容器，监听 <code>8889</code>；生产跑在 <code>114.215.189.118</code>，前端是 <code>/www/wwwroot/aizaotu/dist</code> 的静态文件，后端是 systemd 服务 <code>Zaotu</code> 拉起的 Linux 静态二进制 <code>main</code>，监听 <code>8888</code>，对外域名 <code>https://interface.zaotuai.cn</code>。</p>
+        <p>所有自动化都收敛在仓库根目录的 <code>.cnb.yml</code> 里，跑在 CNB（cnb.build）上。这篇文章就拆开这份真实配置看：它怎么按改动范围决定部署动作、怎么把 develop 自动送进生产、怎么解决「后台菜单是运营在 develop 库里手改的」这个老问题，以及发版失败后怎么一把滚回去。</p>
+
+        <h2>为什么要分环境、分动作</h2>
+        <p>先想清楚三个约束，后面所有设计都是被它们逼出来的：</p>
+        <ul>
+          <li><strong>前端和后端是两个互不相关的交付物。</strong>改一眼前端按钮，不值得重建并重启 Go 容器；反过来改一行 Go 代码，也不该把静态站点重新打一遍。所以 develop 的流水线必须按改动路径拆分。</li>
+          <li><strong>菜单数据会漂移。</strong>GVA 的后台菜单、权限、API、casbin 规则是数据库里的行数据，运营经常在 develop 后台页面上手工调整。如果发布只是把二进制换上去，生产库的菜单永远落后于 develop。</li>
+          <li><strong>配置和密钥不能进镜像。</strong>微信小程序密钥等 runtime 配置独立维护在服务器上，仓库里的 <code>config.docker.yaml</code> 缺少 <code>business.wechat-app</code> 段，绝不能拿它覆盖线上文件。同理，<code>editor/</code> 是一个独立部署的子项目，发布包必须原样保留。</li>
+        </ul>
+
+        <h2>真实实现一：develop 流水线按改动范围分流</h2>
+        <p><code>.cnb.yml</code> 里 <code>develop.push</code> 下挂了三个任务。前两个用 <code>ifModify</code> 做条件触发：只有 <code>web/**</code> 变了才走前端构建，只有 <code>server/**</code> 变了才走后端容器重建：</p>
+        <pre><code>develop:
+  push:
+    - name: 构建并部署开发环境后台
+      ifModify:
+        - ".cnb.yml"
+        - "web/**"
+      docker:
+        image: node:22
+      # npm install --legacy-peer-deps → npm run build
+      # tar czf .cnb-release/aizaotu-web-develop.tar.gz -C web/dist .
+
+    - name: 构建并部署开发环境后端
+      ifModify:
+        - ".cnb.yml"
+        - "server/**"
+      services:
+        - docker
+      docker:
+        image: docker:27-cli
+      # docker build -t aizaotu-server:develop server
+      # docker save aizaotu-server:develop | gzip &gt; .cnb-release/aizaotu-server-develop.tar.gz</code></pre>
+        <p>后端任务在远端并不是盲目重启。它先做一道硬校验：线上必须存在 <code>config.aizaotu-runtime.yaml</code>，缺失就立刻终止，而且这条检查写在「停止旧服务」之前，避免服务停了又起不来：</p>
+        <pre><code>test -s config.aizaotu-runtime.yaml || { echo 'Missing config.aizaotu-runtime.yaml; aborting deployment'; exit 1; }
+python3 check_runtime_config.py config.aizaotu-runtime.yaml
+# 业务容器与 redis 挂在同一个自定义网络 aizaotu-business
+docker network inspect aizaotu-business &gt;/dev/null 2&gt;&amp;1 || docker network create aizaotu-business
+gunzip -c aizaotu-server-develop.tar.gz | docker load
+docker run -d --name aizaotu-server --network aizaotu-business --restart always \
+  -p 8889:8889 \
+  -v "$REMOTE_APP_DIR/config.aizaotu-runtime.yaml:/go/src/.../config.docker.yaml:ro" \
+  -v "$REMOTE_APP_DIR/uploads:.../uploads/file" \
+  -v "$REMOTE_APP_DIR/log:.../log" \
+  aizaotu-server:develop</code></pre>
+        <p>前端任务则保留一个细节：解压前把 <code>editor</code> 目录改名藏起来，清完目录再挪回来，发布包永远碰不到这个独立项目。</p>
+
+        <h2>真实实现二：每次 push develop，自动开一张到 master 的 MR</h2>
+        <p>第三个 develop 任务不做部署，只做一件事：调用 CNB 开放 API，检查并创建 <code>develop → master</code> 的合并请求。它是幂等的——先拉 open 状态的 MR 列表，已存在就跳过；创建时若 API 返回「已存在/无差异」类错误（400/409/422）也视为正常：</p>
+        <pre><code>const listUrl = `${apiBase}/${repoPath}/-/pulls?state=open&amp;base_ref=${encodeURIComponent(targetBranch)}&amp;page=1&amp;page_size=50`;
+const openPulls = await request(listUrl);
+const existed = Array.isArray(openPulls) &amp;&amp; openPulls.some((pull) =&gt;
+  normalizeRef(pull?.head?.ref) === sourceBranch &amp;&amp;
+  normalizeRef(pull?.base?.ref) === targetBranch
+);
+if (existed) { console.log('已存在打开的合并请求，跳过创建。'); return; }
+await request(`${apiBase}/${repoPath}/-/pulls`, {
+  method: 'POST',
+  body: JSON.stringify({ title: `从 ${sourceBranch} 合并到 ${targetBranch}`, head: sourceBranch, base: targetBranch, head_repo: repo })
+});</code></pre>
+        <p>这样工作流就闭环了：push develop → 自动部署开发环境 + 自动准备好一张待人工 Review 的 MR → 人在 CNB 上点合并，master 一收到 push（包括 MR 合入），生产部署立即触发。</p>
+
+        <h2>真实实现三：生产部署，一个脚本锚点前后端共用</h2>
+        <p><code>master.push</code> 下也有两个任务，但部署逻辑用 YAML 锚点抽成了同一段。前端任务在 node:22 容器里构建 <code>web/dist</code>；后端任务在 <code>golang:1.24-bookworm</code> 里交叉编译两个产物——主程序和 <code>cmd/menu-sync</code> 这个小工具：</p>
+        <pre><code>GOPROXY=https://goproxy.cn,direct CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+  go build -mod=mod -trimpath -ldflags="-s -w" -o ../.deploy_build/master-server/main .
+go build -mod=mod -trimpath -ldflags="-s -w" -o ../.deploy_build/master-server/menu-sync ./cmd/menu-sync
+# 两个任务的部署脚本共用同一段：
+env:
+  MASTER_DEPLOY_MODE: web
+  MASTER_SSH_PASSWORD: &amp;master_ssh_password '...'
+script: &amp;master_deploy |
+  # ... 打包 → scp 到 mktemp -d /tmp/aizaotu-master.XXXXXXXX 暂存目录
+  sshpass -e ssh "$DEST" bash -s -- "$MODE" "$REMOTE_TMP" ... &lt;&lt;'REMOTE'
+  set -euo pipefail</code></pre>
+        <p>真正的服务器端逻辑通过 <code>bash -s</code> 以 stdin 喂给生产机执行。它先取一把并发锁，再对「即将被替换的文件」做精确备份，然后才敢停服务：</p>
+        <pre><code>backup_root="/www/wwwroot/aizaotu/.cnb-backups"
+exec 9&gt;"$backup_root/$mode.lock"
+flock -w 600 9
+backup="$backup_root/$(date -u +%Y%m%dT%H%M%S)-${stage##*/}-$mode.tar.gz"
+# 只备份这次要替换的文件，resource、密钥等原样不动
+find "$stage/unpacked" -type f -printf '%P\n' &gt; "$stage/managed.txt"
+tar czf "$backup" -C "$server_dir" -T "$stage/existing.txt"
+rollback_needed=1
+systemctl stop "$service"
+"$stage/menu-sync" -config "$server_dir/config.yaml" -action backup -file "$menu_backup"
+"$stage/menu-sync" -config "$server_dir/config.yaml" -action apply -file "$stage/menus.json"
+cp -a "$stage/unpacked/." "$server_dir/"
+chmod 755 "$server_dir/main"
+systemctl start "$service"</code></pre>
+        <p>服务起来后有两级健康检查：本机先轮询 30 次 <code>http://127.0.0.1:8888/health</code> 必须返回 200，再从公网打 <code>https://interface.zaotuai.cn/api/health</code>（带 <code>--retry 3</code>）确认链路通：</p>
+        <pre><code>healthy=0
+for attempt in {1..30}; do
+  if systemctl is-active --quiet "$service" &amp;&amp;
+     [[ "$(curl --max-time 5 -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8888/health)" == 200 ]]; then
+    healthy=1; break
+  fi
+  sleep 2
+done
+[[ "$healthy" == 1 ]] || { echo "Backend health check failed" &gt;&amp;2; exit 1; }
+[[ "$(curl --retry 3 --retry-delay 2 --max-time 15 -sS -o /dev/null -w '%{http_code}' "$site_url/api/health")" == 200 ]]</code></pre>
+
+        <h2>真实实现四：menu-sync——把 develop 的菜单快照带到生产</h2>
+        <p>生产后端任务打包前会先跑 <code>scripts/export-develop-menus.sh</code>：它 SSH 到开发机，把刚编译好的 <code>menu-sync</code> 二进制 <code>docker cp</code> 进 <code>aizaotu-server</code> 容器，在容器里用 develop 的 runtime 配置只读导出一份菜单快照。注意脚本头注释写得很直白：<em>Export using develop's mounted runtime config and Docker network. No DB writes.</em></p>
+        <pre><code>docker exec -w "$workdir" "$container" "$stage/menu-sync" \
+  -config config.docker.yaml -action export -file "$stage/menus.json"
+docker cp "$container:$stage/menus.json" "$stage/menus.json"</code></pre>
+        <p><code>menu-sync</code> 是 <code>server/cmd/menu-sync/main.go</code> 里一个独立小工具，四个动作 <code>export / apply / backup / restore</code>。它没有任何 schema migration，连接前先校验运行配置是标准 MySQL，并强制要求八张菜单/权限/策略表全部存在且是 InnoDB（因为 apply 要靠事务保证原子性）：</p>
+        <pre><code>action := flag.String("action", "", "export, apply, backup, or restore")
+connection.SetMaxOpenConns(1)
+db.Raw(`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()
+  AND table_name IN ('sys_base_menus','sys_base_menu_parameters','sys_base_menu_btns',
+    'sys_authority_menus','sys_authority_btns','sys_authorities','sys_apis','casbin_rule')
+  AND engine = 'InnoDB'`).Scan(&amp;count)
+if count != 8 { return fmt.Errorf("all eight menu/role/API/policy tables must exist and use InnoDB") }</code></pre>
+        <p>发布顺序因此是：先 <code>-action backup</code> 把生产当前菜单存成 <code>.menus.json</code> 兄弟文件，再 <code>-action apply</code> 写入 develop 导出的快照。工具写文件用的是 <code>O_EXCL</code>，拒绝覆盖上一次部署留下的备份，回滚链路才不会断。</p>
+
+        <h2>真实实现五：失败回滚靠一个 EXIT trap</h2>
+        <p>回滚逻辑是远端脚本里的一个 <code>rollback()</code>，挂在 <code>trap ... EXIT</code> 上。只有当脚本以非零状态退出、且 <code>rollback_needed=1</code>（即已经越过「备份完成、开始替换」那一步）时才触发：停服务、按 <code>managed.txt</code> 删掉这次新写入的文件、解开备份 tar 还原、若菜单也动过就用 <code>-action restore</code> 把 <code>.menus.json</code> 灌回去，最后重新 <code>systemctl start</code>：</p>
+        <pre><code>rollback() {
+  status=$?
+  trap - EXIT
+  if (( status != 0 &amp;&amp; rollback_needed )); then
+    systemctl stop "$service"
+    while IFS= read -r file; do rm -f -- "$server_dir/$file"; done &lt; "$stage/managed.txt"
+    tar xzf "$backup" -C "$server_dir"
+    if (( menu_restore_needed )); then
+      "$stage/menu-sync" -config "$server_dir/config.yaml" -action restore -file "$menu_backup"
+    fi
+    systemctl start "$service"
+  fi
+  exit "$status"
+}
+trap rollback EXIT</code></pre>
+        <p>前端模式的回滚更简单：备份时 <code>tar czf "$backup" --exclude='./editor'</code>，失败就清空 <code>web_dir</code>（同样跳过 <code>editor</code>）再解开备份。整套机制意味着：发版失败的默认动作是「回到发版前那一秒」，而不是挂在原地等人救。</p>
+
+        <h2>镜像与 Nginx：开发走容器，生产走裸二进制</h2>
+        <p>开发环境的镜像就是 <code>server/Dockerfile</code>：多阶段构建，<code>golang:alpine</code> 编译后丢进 <code>alpine:latest</code>，设 <code>TZ=Asia/Shanghai</code>，<code>EXPOSE 8889</code>，入口 <code>./server -c config.docker.yaml</code>——而这个 <code>config.docker.yaml</code> 在运行时被宿主机的 runtime 配置只读挂载覆盖。仓库里 <code>deploy/docker/Dockerfile</code>（centos:7 里同时跑 mysqld、redis、nginx 的 all-in-one）和 <code>docker-compose.yaml</code>（gva-web/gva-server/gva-mysql 那套）其实是 GVA 上游遗留，真实生产早已不用，只留作本地开发参考。</p>
+        <p>生产 Nginx（<code>nginx.conf</code>）本身不参与部署流程——流水线明确不碰它。要点只有几个：静态根 <code>/www/wwwroot/aizaotu/dist</code>，<code>/api/</code> 反代到 <code>127.0.0.1:8888</code>，且 <code>proxy_pass</code> 结尾的 <code>/</code> 用来做前缀剥离，配置里专门注释警告不要加 <code>rewrite ... break</code>（会和 location 内的 if 一起搞乱捕获组，导致 404）；<code>OPTIONS</code> 直接回 204；长连接业务把 <code>proxy_read_timeout</code> 放到 86400s：</p>
+        <pre><code>location /api/ {
+    if ($request_method = 'OPTIONS') { return 204; }
+    proxy_pass http://127.0.0.1:8888/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 86400s;
+}</code></pre>
+
+        <h2>权衡与取舍</h2>
+        <ul>
+          <li><strong>密码直接写进 <code>.cnb.yml</code>。</strong>开发机密码、生产密码都明文在仓库里，靠仓库私有和 CNB 环境变量兜底；好处是 YAML 锚点 <code>&amp;master_ssh_password</code> 让前后端任务天然复用同一份配置，不用维护外部密钥系统。这是小团队用复杂度换运维负担的典型选择。</li>
+          <li><strong>双轨部署。</strong>开发用 Docker 容器（<code>docker save | scp | docker load</code>，简单但吃带宽），生产用交叉编译静态二进制 + systemd（<code>Zaotu.service</code>，User=www，<code>Restart=on-failure</code>）。两套运行时不统一，但生产机上没有 Docker 依赖、健康检查可以直接 <code>curl 127.0.0.1:8888/health</code>，排障路径最短。</li>
+          <li><strong>备份是「精确替换集」而不是整机快照。</strong><code>managed.txt</code> 只记录这次会被覆盖的文件，备份小、回滚快，代价是脚本必须自己维护清单；菜单快照和文件备份成对出现（<code>.tar.gz</code> + <code>.menus.json</code>），任何一半缺失都不会假装成功。</li>
+          <li><strong><code>flock -w 600</code> 串行化发布。</strong>前后端共用同一个备份根目录，用一把文件锁避免两次发布交错备份/回滚，最多等 10 分钟，宁可排队也不并发改生产。</li>
+        </ul>
+        <blockquote><p>CI/CD 的价值不在于「点一下按钮就发版」，而在于把发版拆成可证明安全的步骤：先按改动范围少做事，再在停服前备份、健康检查后才宣布成功、失败时由 trap 自动退回到上一秒。菜单会漂移、密钥不能进镜像、editor 不能被覆盖——这些脏约束，最终都变成了 <code>.cnb.yml</code> 里一行行可以被 Review 的 shell。</p></blockquote>
+      </div>
+    </article>
+    <script src="/assets/js/main.js"></script>
+  </body>
+</html>

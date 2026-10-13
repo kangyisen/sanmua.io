@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>设计工作台：SSE 流式生成、异步消息与预设体系 · sanmua</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <script src="/assets/js/theme.js"></script>
+    <link rel="stylesheet" href="/assets/css/main.css" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+  </head>
+  <body>
+    <article class="prose">
+      <header class="prose__header">
+        <a class="prose__back" href="/">&larr; 返回首页</a>
+        <h1 class="prose__title">设计工作台：SSE 流式生成、异步消息与预设体系</h1>
+        <div class="prose__meta"><span>2026-10-13</span><span>Go</span><span>AI</span><span>设计</span></div>
+      </header>
+
+      <div class="article-body">
+        <p>「一秒修图」的设计室（designstudio）是产品里最重的一条链路：用户上传参考图、描述需求，后端先调 LLM 把需求整理成执行方案，确认后再派发给文生图模型出图，整个过程动辄一两分钟。这一篇复盘它的服务端设计：<code>server/service/business/designstudio/</code> 下那二十多个 Go 文件，是怎么把一个长耗时、多阶段、要计费的 AI 任务，包装成 App 里「边想边出图」的体验的。</p>
+
+        <h2>背景：一个任务里塞了三个慢步骤</h2>
+        <p>设计室的一次创作不是一次 HTTP 请求：用户发消息后，系统要先让「设计室总管」Agent（director）理解需求并给出方案；方案确认后，再按 <code>CreationScope</code>（创作类型、投放平台、画面比例、张数）去调 Seedream 或千问出图；出图可能一次失败一半，还要按张计费。任何一步卡住，前端如果只是干等转圈，体验就是「App 卡死了」。所以设计室从第一天起就没有走「同步等结果」的路，而是选了 SSE 流式推送 + 状态落库 + 断线重连这套组合。</p>
+
+        <h2>为什么是流式，而不是轮询</h2>
+        <p>轮询的问题在于：长任务平均两分钟，轮询间隔短了浪费 QPS，长了用户感知不到进度。设计室的选择是开一条 SSE 长连接，但连接只负责「通知状态变了」，真正的业务状态永远在数据库里。看 <code>events.go</code> 里的事件总线：</p>
+        <pre><code>func notifyChannel(topic string) {
+    sessionEvents.Lock()
+    for ch := range sessionEvents.listeners[topic] {
+        select {
+        case ch &lt;- struct{}{}:
+        default: // 慢订阅者直接丢通知，不阻塞生产者
+        }
+    }
+    sessionEvents.Unlock()
+    if global.GVA_REDIS != nil {
+        // 多实例部署时通过 Redis Pub/Sub 广播同一个 topic
+        global.GVA_REDIS.Publish(ctx, topic, "changed")
+    }
+}</code></pre>
+        <p>注意 channel 里传的是一个空的 <code>struct{}{}</code>，不携带任何用户数据——通知只是个「叮」，订阅者收到后自己回数据库拉一份最新快照。单实例时走内存 hub，配了 Redis 就自动叠加 Pub/Sub，部署形态切换对业务代码透明。</p>
+
+        <h2>SSE 通道：从发消息到监听会话</h2>
+        <p>入口在 <code>async_message.go</code> 的 <code>SubmitMessageAndWatch</code>。它做了一件很关键的事：把「执行任务」和「HTTP 订阅」解耦。请求进来时先冻结请求体里的切片，然后起一个 goroutine 真正干活，主 goroutine 只负责把事件转发给 SSE：</p>
+        <pre><code>// 慢/断连的观察者绝不能阻塞一个已付费的任务
+progress := make(chan any, 64)
+go func() {
+    defer func() { /* recover panic，包成「设计任务执行异常」 */ }()
+    done.detail, done.err = work(func(event any) {
+        select {
+        case progress &lt;- event:
+        default: // 中间思考过程是 best-effort，丢了就丢了
+        }
+    })
+}()</code></pre>
+        <p>任务跑完后，代码保证「accepted → progress → snapshot」的顺序：先把缓冲里残留的事件全部 flush 出去，再推一条 <code>{"type":"snapshot"}</code>，最后移交 <code>WatchSession</code> 持续监听这个会话。<code>WatchSession</code>（events.go）的协议很克制，连接上只推这几种事件：</p>
+        <ul>
+          <li><code>snapshot</code>：连上时先推一次全量会话详情，让前端立刻渲染；</li>
+          <li><code>progress</code>：之后每次状态变更推一次；</li>
+          <li><code>done</code>：会话状态不再 busy（thinking/generating/pending）时推一次收尾；</li>
+          <li><code>reconnect</code>：连接满 30 分钟主动断开，让前端带着新的 token 重连。</li>
+        </ul>
+        <p>而 LLM Agent 自己的思考过程，在 <code>design_studio.go</code> 里以 <code>agent_start</code>、<code>thought</code>、<code>agent_done</code>、<code>handoff</code> 这些事件推送；OpenRouter 的流式增量则在 <code>openrouter.go</code> 的 <code>parseOpenRouterStream</code> 里每收到一段 delta 就推 <code>{"type":"agent_chunk","agentCode":"director"}</code>。前端要做的就是按 type 分发：thought 打字机，progress 刷新状态条，snapshot 整表替换。</p>
+
+        <h2>异步消息与部分结果：断了也要交差</h2>
+        <p>长任务最容易出的事故是：图已经出了 3 张，第 4 张超时，整个任务失败，用户白扣一次费。设计室的解法在 <code>partial_results.go</code>：只要有一张图成功，就立刻落库一份部分结果，并顺手写一条 assistant 消息告诉用户已经交了几张：</p>
+        <pre><code>func persistPartialResult(run *business.DesignRun, result RunResult) {
+    if len(result.Images) == 0 { return }
+    encoded, _ := json.Marshal(result)
+    gallery, _ := json.Marshal(map[string]any{
+        "type": "gallery", "title": "已完成的图片",
+        "images": result.Images, "partial": true,
+        "fontCopyrightNotice": FontCopyrightNotice,
+    })
+    db().Transaction(func(tx *gorm.DB) error {
+        tx.Model(&amp;business.DesignRun{}).Where("run_id = ?", run.RunID).
+            Update("result_json", string(encoded))
+        tx.Create(&amp;business.DesignMessage{... Role: "assistant",
+            MessageType: "gallery",
+            Content: fmt.Sprintf("已完成 %d 张图片，已按单张积分计费；未完成部分请稍后重试。", len(result.Images))})
+    })
+}</code></pre>
+        <p>另一个配套机制在 <code>completions.go</code>：用户关了 App 再回来，怎么知道哪些任务出结果了？<code>UnreadCompletions</code> 直接查「已完成且未读」的 DesignRun，以及状态在 collecting / waiting_confirm 的会话里挂着的 attention 消息，打包成一个 <code>CompletionSnapshot</code>；<code>WatchCompletions</code> 把它推成 <code>{"type":"completions","data":snapshot}</code>。已读用 <code>UpdateColumn</code> 而不是 <code>Updates</code>，避免改动 <code>updated_at</code> 把会话历史顺序打乱；一次最多标记 200 个，防止误操作。</p>
+
+        <h2>创作选项：把业务参数做成可配置目录</h2>
+        <p>设计室不希望「创作类型有哪些、支持哪些平台、支持哪些比例」硬编码在 Go 里，于是抽成了 <code>creation_options.go</code>。默认值用 <code>//go:embed creation_options_defaults.json</code> 编进二进制，运营在后台改完才落库：</p>
+        <pre><code>type CreationOptions struct {
+    WorkTypes []WorkTypeOption `json:"workTypes"`
+    Platforms []string         `json:"platforms"`
+    Ratios    []string         `json:"ratios"`
+}
+// 默认 JSON 里有 poster / social_media / ecommerce_set / logo / packaging …
+// 平台覆盖淘宝、抖音、小红书、Amazon、TikTok Shop ……
+// 比例覆盖 1:1、9:16、1.91:1、2.35:1 等 21 种</code></pre>
+        <p>校验也相当严格：类型代码必须是 <code>^[a-z][a-z0-9_]{0,59}$</code>，比例用正则匹配后还要约分，并把宽高比卡死在 1:3 到 3:1 之间——注释里写明了原因：Decimal ratios are useful for social ads (1.91:1) and cinema covers (2.35:1)。保存选项时有个细节很见功底：<code>SaveCreationOptions</code> 会先加载预设目录，如果某个预设还在用即将被删掉的选项，直接报错「预设『xxx』仍使用待删除的选项」，不让脏配置把线上模板搞坏。</p>
+
+        <h2>预设体系：一份 JSON、乐观锁、对外只读发布页</h2>
+        <p>预设（preset）是运营给用户做的「一键模板」。数据模型三层：<code>PresetCategory</code> 分类、<code>DesignPreset</code> 模板（带 prompt、参考图、cover、scope）、整体打包成 <code>PresetCatalog</code>，整条目录存在数据库一行里，带一个 <code>Revision</code> 版本号。两个管理员同时编辑时，保存用乐观锁：</p>
+        <pre><code>result := tx.Model(&amp;business.DesignPresetCatalog{}).
+    Where("id = 1 AND revision = ?", expected).
+    Updates(map[string]any{"revision": c.Revision, "data": string(raw)})
+if result.RowsAffected != 1 {
+    return errors.New("预设已被其他管理员修改，请先备份当前编辑内容，再刷新重新编辑")
+}</code></pre>
+        <p>封面和参考图也不是什么 URL 都收：<code>ValidPresetImageURL</code> 强制要求同 scheme、同 host、无 query、无 fragment、路径里不能有 <code>..</code>，只能用公有桶永久地址——签名临时链接和外链图都会被拒。对外的发布页 <code>published_preset_page.go</code> 走 <code>PagePublishedPresets</code>：只保留 <code>Enabled=true</code> 的分类和模板，按 categoryId 过滤、按 sortIndex 排序分页（pageSize ≤ 50），返回 <code>HasMore</code>。管理员草稿和禁用项在这一层全部被过滤掉，前端永远拿不到未发布内容。</p>
+
+        <h2>图像模型与 OpenRouter 接入</h2>
+        <p>图像侧的能力目录在 <code>image_models.go</code>，一共四个模型：Seedream 5.0 Pro / Lite（带日期后缀的 Ark ID）和通义千问的 qwen-image-3.0 / pro。每个模型声明自己支持的尺寸档（1K/1.5K/2K/3K/4K）和最大参考图数（Pro 10 张、Lite 14 张、千问 3 张）。<code>image_settings.go</code> 里用四段 JSON 模板常量分别描述文生图、参考图在 seedream 和 qwen 两种 provider 下的请求体，靠 <code>{model}/{prompt}/{size}/{picture}</code> 占位符注入，切 provider 时由 <code>studioImageSettingMigration</code> 自动迁移模板 ID。</p>
+        <p>文本 Agent 走 OpenRouter（openrouter.go），所有 director 调用统一经过 <code>callAgentJSONWithEmitter</code>：强制 <code>response_format: json_object</code>、MaxTokens 8000、system prompt 里追加「你必须只返回合法 JSON」，请求头里带着 <code>HTTP-Referer: https://zaotuai.cn</code> 和 <code>X-Title: 一喵修图 Agent 设计室</code>。HTTP 客户端超时故意给到 10 分钟——注释说得很直白：OpenRouter 路由到繁忙 provider 时会慢，短超时只会报一个误导性的 "Client.Timeout while reading body"。流式时逐行解析 <code>data:</code> 帧，拼完全文后再统一 <code>cleanJSON</code>（剥掉 markdown 围栏、截取首尾花括号）反序列化。</p>
+
+        <h2>策略与脱敏：SVIP、积分、对外只给安全文案</h2>
+        <p><code>policy.go</code> 是这层的保险丝。入口 <code>CheckAccess</code> 每个 App 接口都调一次，不信任客户端传来的 VIP 标记，直接查用户积分，低于 SVIP 直接拒；<code>checkStudioBudget</code> 在任务提交前按 <code>studioUnitPoints</code>（每个模型单张积分）预估总额度，不够就报 <code>ErrInsufficientPoints</code>。出图尺寸也有预算约束：<code>studioScopedSize</code> 把像素面积压在 1536² 以内并保持用户选的比例，宽高向下取整到 16 的倍数。</p>
+        <p>更有意思的是对外脱敏：<code>PublicError</code> 是一个白名单，只有明确列出的安全文案（参考图超限、积分不足、「设计项目不存在」等）才原样透传，其余一律替换成「本次设计未能完成，请稍后重试」；<code>PublicDetail</code> 会把 <code>Tasks</code>（内部 prompt、provider 诊断）整个砍掉，gallery / result_json 里的 <code>prompts</code>、<code>model</code>、<code>provider</code>、<code>review</code> 字段也删掉；连 <code>WatchSession</code> 额外塞的那个 <code>run</code> 对象，都被 <code>PublicEmitter</code> 专门 <code>delete(clean, "run")</code> 拦截——内部诊断永远只留在管理后台。</p>
+
+        <h2>权衡：为什么不追求完美实时</h2>
+        <p>回头看这套设计，几个取舍都很克制：SSE 通道里传空 struct 而不是状态快照，是因为快照要查库，通知必须便宜；progress channel 缓冲 64 且满了就丢，是因为中间思考过程本来就可再生，不能让前端卡顿拖死一个已付费任务；连接 30 分钟主动断开让前端重连，是为了让 token 续签和基础设施故障有个自愈窗口；部分结果先落库再继续跑，是为了把「计费成功」和「任务完成」解耦——出几张算几张，失败的部分用户重试即可。流式带来的体验提升，靠的不是每条消息都实时，而是状态落库做兜底、连接只负责敲门。</p>
+
+        <blockquote><p>设计室的 SSE 不是传输层优化，而是一句承诺：连接可以断、前端可以慢、甚至出图可以失败一半，但只要任务已经受理，数据库里的状态就永远是最新的，用户回到 App 时看到的就是真相。</p></blockquote>
+      </div>
+    </article>
+    <script src="/assets/js/main.js"></script>
+  </body>
+</html>

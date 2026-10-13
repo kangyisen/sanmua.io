@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>支付与订单：多渠道回调、Apple IAP 与订阅 · sanmua</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <script src="/assets/js/theme.js"></script>
+    <link rel="stylesheet" href="/assets/css/main.css" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+  </head>
+  <body>
+    <article class="prose">
+      <header class="prose__header">
+        <a class="prose__back" href="/">&larr; 返回首页</a>
+        <h1 class="prose__title">支付与订单：多渠道回调、Apple IAP 与订阅</h1>
+        <div class="prose__meta"><span>2026-10-13</span><span>Go</span><span>支付</span><span>架构</span></div>
+      </header>
+
+      <div class="article-body">
+        <p>「一秒修图」是个 iOS + 安卓双端的 AI 修图 App，收钱这件事天然要接三条完全不同的通道：微信支付（APP 支付 + 扫码）、支付宝（APP 支付 + H5 网页支付），以及 Apple 内购。三家的下单协议、回调方式、验签算法、状态机都不一样，苹果这边还叠了一层自动续订订阅和 App Store Server Notifications V2。这篇复盘把 <code>service/business/</code> 下 pay / order / callback / appstore 四个包里真实的下单抽象、回调验签、幂等与订阅处理完整记录下来。</p>
+
+        <h2>背景：三种通道，三种世界</h2>
+        <p>最开始的写法是在下单接口里 <code>if payType == 微信 ... else if 支付宝 ... else if 苹果 ...</code>，回调更是每个渠道一坨。三个渠道的差异远不止 SDK：微信 APIv3 要求下载平台证书、用 SHA256-RSA 验签；支付宝是表单回调、用平台公钥验签；苹果根本没有「服务端回调」——早期版本是 App 端支付完再通知服务端，服务端拿订单号去 App Store Server API 反查，后来才补上苹果服务器 V2 通知。如果抽象不做对，每加一个渠道就是一次全身手术。</p>
+
+        <h2>统一抽象：一个 Payer 接口，三个适配器</h2>
+        <p>最终落点是 <code>service/business/pay/pay.go</code> 里一个很薄的接口：下单方只认识 <code>Payer</code>，不认识任何具体渠道。</p>
+        <pre><code>// service/business/pay/pay.go
+type Payer interface {
+    // Init 完成支付客户端初始化
+    init() error
+
+    // PrePay 根据系统订单生成预支付单，并生成APP端支付调起参数
+    PrePay(*PrePayReq, enums.PayType) (map[string]string, error)
+
+    // QueryOrderStatus 查询订单状态
+    QueryOrderStatus(mechId string, tradeNo string, payType enums.PayType) (enums.PayStatus, string, error)
+}
+
+func GetPayer(payType enums.PayType) (payer Payer, err error) {
+    idx := payType-1
+    payer = payers[idx]
+    if payer != nil { return payer, nil }
+    // ... payerLocker 双检锁省略
+    switch payType {
+    case enums.PayTypeWechat, enums.PayTypeWechatQrCode:
+        payer = newWechatPay()
+    case enums.PayTypeApple:
+        payer = newApplePay()
+    case enums.PayTypeAliPay, enums.PayTypeAliH5Qrcode:
+        payer = newAliPay()
+    default:
+        return nil, errors.New("不支持的支付类型")
+    }
+    if err = payer.init(); err != nil { return nil, err }
+    payers[idx] = payer
+    return payer, nil
+}</code></pre>
+        <p>几个值得记的设计决策：第一，payer 按 <code>payType-1</code> 做下标放进一个切片 <code>payers</code>，懒加载 + 双检锁，客户端第一次用到某个渠道才初始化证书；第二，<code>PrePayReq</code> 只有订单号、用户号、金额、备注、openId 这些各渠道都共有的字段，渠道差异藏在 <code>PrePay</code> 返回的 <code>map[string]string</code> 里——微信返回调起参数（appid/prepayid/sign），支付宝返回一串签名后的 order string，苹果只回 orderId/amount/currency，让 App 自己弹系统支付面板。</p>
+        <p>定价也按渠道拆。<code>order/buy_goods.go</code> 的 <code>Buy()</code> 里有段注释说得很直白：安卓/微信/支付宝以 <code>b_android_package</code> 为准，苹果成交价由 App Store 价格点决定，以 <code>b_ios_subscription</code> / <code>b_ios_in_app_purchase</code> 为准，「苹果侧不存在后台折扣」。下单成功后统一走 <code>order_handle.go</code> 的 <code>WithBuyOrder</code>：先对用户加分布式锁，事务里建一张 <code>pay_status = PayStatusWait</code> 的订单，事务外再调 <code>payer.PrePay</code>（第三方调用不可控，不能放在事务里）。</p>
+
+        <h2>回调：三条独立路由，验签各做各的</h2>
+        <p>先说一个诚实的结论：callback 包里并没有一个「根据请求识别渠道再分发」的中心 dispatcher——<code>callback_base.go</code> 里就两个公共函数 <code>log()</code> 和 <code>db()</code>。真实做法是<strong>一个渠道一条独立路由</strong>，handler 内部各自 <code>pay.GetPayer</code> 拿回对应 payer 做类型断言，验签不过直接返回失败让平台重试。</p>
+        <p>微信回调 <code>WechatPayNotifyHandler</code> 走 APIv3 的 <code>ParseNotifyRequest</code>，验签 + 解密一把完成，失败统一报「验证签名失败」：</p>
+        <pre><code>// pay/pay_wechat.go：用证书下载器建验签器，验签并解密通知
+verifier := verifiers.NewSHA256WithRSAVerifier(w.certDownloader)
+handler, err := notify.NewRSANotifyHandler(w.conf.ApiV3Key, verifier)
+// ...
+_, err = handler.ParseNotifyRequest(context.Background(), request, notifyData)
+if err != nil { return errors.New("验证签名失败") }</code></pre>
+        <p>支付宝回调是表单，验签之外还多一步「这个通知是不是发给我们这个 AppID 的」，防止别的商户的回调打到我们这儿：</p>
+        <pre><code>// callback/callback_pay_ali.go
+err = payer.VerifySign(values)            // 平台公钥验签
+if err != nil { exp = err; return }
+if notifyData["app_id"] != conf.AppID {
+    exp = errors.New("验证app_id失败，app_id不匹配")   // 防跨商户伪造
+    return
+}
+if notifyData["trade_status"] == "TRADE_SUCCESS" {
+    payStatus = enums.PayStatusSuccess
+    orderId, _ = strconv.ParseInt(notifyData["out_trade_no"], 10, 64)
+}
+err = order.HandleOrderResult(datatype.SfID(orderId), payStatus, notifyData["trade_status"])</code></pre>
+        <p>苹果最特殊：<code>ApplyPayNotifyHandler</code> 开头先 <code>http.CheckToken(ctx)</code>——因为它是 <strong>App 端回调</strong>而不是苹果服务器直推，必须鉴权；只有 <code>PayStatus == PayStatusSuccess</code> 时才真正去苹果那边反查订单，并连做四道校验：</p>
+        <pre><code>// callback/callback_pay_apple.go
+resp, err := payer.GetAppStoreOrder(notifyData.AppleOrderId)  // JWS 验签在内部
+if resp.PurchaseDate &lt; time.Now().Unix()-24*60*60 {
+    return fmt.Errorf("订单已过期")        // 防拿历史订单恶意回调
+} else if resp.BundleId != conf.BundleId {
+    return fmt.Errorf("应用Bundle不匹配")
+}
+if resp.ProductId != order.ProductId {
+    return fmt.Errorf("商品与订单不匹配")   // 不能把 A 套餐的单付到 B 订单上
+}
+// 全局幂等：一笔苹果交易只允许入账一次
+if paid, ok := order2.FindPaidOrderByAppleTransaction(txnId); ok &amp;&amp; paid.OrderId != notifyData.OrderId {
+    return fmt.Errorf("该苹果交易已完成入账")
+}</code></pre>
+
+        <h2>幂等：数据库条件更新才是闸门</h2>
+        <p>所有渠道回调最后都汇到 <code>order_handle.go</code> 的 <code>HandleOrderResult</code>。它的幂等设计值得单独讲：真正的防重不是 Redis 锁（注释里明说锁只是「尽力而为」的优化层），而是一句带状态条件的 UPDATE——</p>
+        <pre><code>// order/order_handle.go：只有「待支付」订单才能被翻成成功，并发下靠 InnoDB 行锁串行化
+res := tx.Model(&amp;business.Order{}).
+    Where("order_id = ? AND pay_status = ?", orderId, enums.PayStatusWait).
+    Update("pay_status", status)
+if res.RowsAffected == 0 {
+    // 已被其它回调处理过（重复/并发），幂等跳过，绝不重复发放
+    return nil
+}
+return UpdateUserPointsByOrder(tx, &amp;order)</code></pre>
+        <p>重复回调时只有第一笔 UPDATE 命中 <code>RowsAffected==1</code>，后面的全命中 0 行直接返回 nil——对平台回 nil 是为了让它收到成功响应、停止重试。苹果侧再加一道交易级去重：<code>order/apple_transaction.go</code> 里 <code>FindPaidOrderByAppleTransaction</code> 按 <code>apple_order_id + pay_status=成功</code> 查，登录回调、匿名验证、续费通知四条通道发放前都先过它，保证同一笔交易全局只入一次账。</p>
+
+        <h2>Apple IAP：JWS 证书链校验与双环境 fallback</h2>
+        <p>苹果反查走 App Store Server API：<code>pay_apple.go</code> 用 .p8 私钥签 ES256 JWT 当 Bearer Token（aud 固定 <code>appstoreconnect-v1</code>），GET <code>/inApps/v1/transactions/{orderId}</code>。返回体里交易信息是一段 JWS，服务端手工验整条证书链——这是整个支付链路里最硬核的一段：</p>
+        <pre><code>// pay/pay_apple.go：x5c[0]=叶证书，x5c[1]=中间证书，根是本地 Apple Root CA G3
+opts := x509.VerifyOptions{
+    Roots:         rootPool,    // AddCert(a.rootCACert)
+    Intermediates: intermediatePool,
+}
+if _, err := leafCert.Verify(opts); err != nil {
+    return nil, fmt.Errorf("certificate chain verification failed: %w", err)
+}
+// 再用叶证书公钥 ECDSA 验 JWS 签名（R||S 拼接格式，按曲线长度切开）</code></pre>
+        <p>这里有个真实的运维细节：<code>init()</code> 加载不到 <code>RootCAFile</code> 时只是打一条 <code>JWS signature verification will be DISABLED</code> 的警告继续跑，代码里多处提醒「UNSAFE」——证书校验是可降级的，降级就等于裸奔，上线时必须配好 Apple Root CA G3。另外 Production 和 Sandbox 数据互相隔离，<code>GetAppStoreOrder</code> 先查主环境，404/401/403 就自动切另一环境重试，这样 TestFlight 测试者、App Review 审核、沙盒账号和正式用户都能被验证。</p>
+
+        <h2>订阅：三层 JWS 通知与 originalTransactionId 映射</h2>
+        <p>自动续订是另一条链路。苹果服务器通知 V2 的请求体是 <code>{"signedPayload": "&lt;JWS&gt;"}</code>，<code>callback_subscribe_apple.go</code> 要解三层：通知主体 → signedTransactionInfo → signedRenewalInfo，每层都过同一套 <code>VerifyAndDecodeJWS</code>。然后按通知类型分发：</p>
+        <pre><code>// callback/callback_subscribe_apple.go
+switch payload.NotificationType {
+case "SUBSCRIBED":     // 首购：订单由App回调建，这里只同步订阅记录
+    return handleSubscribedNotification(payload, txn, renewal)
+case "DID_RENEW":      // 续订扣款成功：生成续费订单并发放会员权益
+    return handleDidRenewNotification(payload, txn, renewal)
+case "DID_FAIL_TO_RENEW":  // 计费重试/宽限期
+case "EXPIRED", "GRACE_PERIOD_EXPIRED":  // 过期
+case "REFUND", "REVOKE":  // 退款/撤销，只改状态并告警人工核查
+}</code></pre>
+        <p>关键映射是 <code>originalTransactionId ↔ 用户</code>：苹果后续的续订通知只带 originalTransactionId，没有这条记录就找不到人。所以支付成功的回调里会顺手 <code>AppleSubscribe()</code> 落一条 <code>b_apple_subscription</code>（在 <code>callback_pay_apple.go</code> 里直接调，注释说「不依赖 App 端再上报，App 上报还能兜底」）。续订成功时 <code>DID_RENEW</code> 先查 <code>LatestTransactionId</code> 和 <code>FindPaidOrderByAppleTransaction</code> 双幂等，再以苹果实际扣款（千分单位 price/10 转分）建一张 <code>PayTypeAppleSubscribe</code> 的成功订单发权益。价格管理侧，<code>appstore/appstore_price.go</code> 封装了对 App Store Connect API 的价格点读写：拉订阅/内购的 CHN 价格点、<code>PushSubscriptionPrice</code> 推送改价前必须先删掉已有 future price（Apple 规则：每个 territory 只能有一个未来价格），后台改价最终都沉淀到本地 <code>LoadApplePrice(productId)</code>，下单时优先用本地待生效价。</p>
+
+        <h2>匿名购买：没登录也能先发货</h2>
+        <p>iOS 用户可能没注册就先买了。<code>order/anonymous_purchase.go</code> 让这条路走得通：<code>VerifyAnonymousPurchase</code> 只凭 deviceId + appleOrderId + productId 就向苹果反查验证，产品 ID 对得上就落一条 <code>b_anonymous_purchase</code>（记下积分/会员权益快照，但<strong>不入账、不发权益</strong>）。等用户注册登录后，<code>SyncAnonymousPurchasesToUser(deviceId, userId)</code> 把未同步记录转成正常订单，再调公共的 <code>HandleOrderResult(orderId, PayStatusSuccess, ...)</code> 发放——两次事务：先建订单，再发权益并标记 <code>is_synced</code>。每条路径发放前同样过 <code>FindPaidOrderByAppleTransaction</code>，防止同一个交易被登录回调和匿名同步各发一次。</p>
+
+        <h2>订单监控：内存统计 + 定时落库</h2>
+        <p><code>order/order_monitor.go</code> 不是对账兜底（它没有去拉微信/支付宝账单核对），而是一个订单活跃度计数器：<code>UsageStatistics</code> 用 <code>datatype.AtomicU64</code> 在内存里记当日/当月/总订单数，下单成功 <code>dayAddOrder()</code> +1，后台 goroutine 每 2 秒把变更写回 <code>charge_statistics</code> 配置表，跨天/跨月自动清零。注释里写得很诚实：「本统计方法只适合单机场景，如果是集群，需要改造」，且「只是粗略统计，允许有误差」。真正的对账兜底靠的是前面那套幂等闸门 + 各渠道 <code>QueryOrderStatus</code> 主动查询能力（注意支付宝和苹果的 <code>QueryOrderStatus</code> 目前还是 <code>NotImplemented</code>，线上目前只靠被动回调）。</p>
+
+        <h2>权衡</h2>
+        <ul>
+          <li><strong>接口小而薄</strong>：Payer 只有三个方法，渠道特有的验签/查价留在各自包里，通过类型断言取出——换来的是下单主流程零分支，代价是回调 handler 仍要自己写胶水。</li>
+          <li><strong>幂等押注数据库</strong>：Redis 锁挂了也不重复发货，正确性由 <code>WHERE pay_status=待支付</code> 的条件更新保证——这是支付系统里最值钱的一条经验。</li>
+          <li><strong>苹果把校验做重</strong>：JWS 证书链 + BundleId + ProductId + 24 小时时效 + 交易级去重五道闸，因为 App 端回调天然不可信，一切以苹果服务器返回为准。</li>
+          <li><strong>匿名通道只存快照不发权益</strong>：把「验证」和「入账」解耦，既接住了未登录付费，又让幂等规则保持统一。</li>
+        </ul>
+
+        <blockquote><p>支付系统的复杂，从来不在「把钱收进来」，而在证明这笔钱真的属于这个用户、这个订单，且只发一次。三条渠道、五种支付方式、四条发放通道，最后收敛到同一个 Payer 接口和一句条件更新——这就是我们能睡着觉收钱的全部底气。</p></blockquote>
+      </div>
+    </article>
+    <script src="/assets/js/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>形象照/证件照：服务端 HTML 合成与尺寸适配 · sanmua</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <script src="/assets/js/theme.js"></script>
+    <link rel="stylesheet" href="/assets/css/main.css" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+  </head>
+  <body>
+    <article class="prose">
+      <header class="prose__header">
+        <a class="prose__back" href="/">&larr; 返回首页</a>
+        <h1 class="prose__title">形象照/证件照：服务端 HTML 合成与尺寸适配</h1>
+        <div class="prose__meta"><span>2026-10-13</span><span>Go</span><span>设计</span><span>编程</span></div>
+      </header>
+
+      <div class="article-body">
+        <p>「一秒修图」里有两个长得像、其实分工不同的工具：形象照（<code>profilephoto</code>，ToolType 179，模型 <code>doubao-seedream-5-0-pro-260628</code>）和证件照目录（<code>idphotocatalog</code>，AIToolType 178）。前者要给用户一个「选造型 → 上传照片 → 生成」的拍摄引导页；后者要维护几百条一寸二寸的真实打印规格。这个引导页不是前端工程产物，而是后端用 Go 的 <code>embed.FS</code> 在服务端拼出来的一个独立 HTML，上传到公共存储后由 APP 的 WebView 打开。这篇把渲染管线、单人/双人布局差异、尺寸校验和证件照规格表完整拆开。</p>
+
+        <h2>为什么在服务端拼 HTML</h2>
+        <ul>
+          <li>造型库（分类 → 子分类 → 造型）由运营在后台维护，Prompt、积分、模型、案例图全在服务端。<code>TemplateConfig</code> 的注释写得很直白：客户端请求永远不能选模型、提示词、价格或案例图。</li>
+          <li>每个子分类需要一个独立、内容寻址的 URL，<code>RenderGroupHTML</code> 每次只 embed 一个子分类，绝不把兄弟组和私有 Prompt 一起吐给前端。</li>
+          <li>WebView 里没有前端构建链。服务端拼好一次性发出去，APP 再通过 <code>window.ProfilePhoto.configure({nonce, category, group_id, ...})</code> 桥接，页面和子分类 ID 强绑定，不一致直接报错。</li>
+        </ul>
+        <p>整页资产在编译期就打进二进制：</p>
+        <pre><code>//go:embed category.html page.css couple.css single.css loading.css page.js layouts/*.html guides.json couple_assets.json
+var pageFiles embed.FS</code></pre>
+
+        <h2>渲染管线：pages.go 定类型，html.go 拼外壳</h2>
+        <p>页面长什么样，先由 <code>pages.go</code> 把一个 Category 归到某种「页面类型」，再从 <code>page_types.json</code> 查出文案、强调色和上传模式：</p>
+        <pre><code>type PageSpec struct {
+    Layout      string `json:"layout"`
+    Title       string `json:"title"`
+    UploadTitle string `json:"upload_title"`
+    UploadMode  string `json:"upload_mode,omitempty"`
+    Accent      string `json:"accent"`
+    Intro       string `json:"intro"`
+    Action      string `json:"action"`
+    MinPhotos   int    `json:"min_photos"`
+    MaxPhotos   int    `json:"max_photos"`
+    ExtraLabel  string `json:"extra_label"`
+    Tip         string `json:"tip"`
+}
+
+func EffectivePageKind(cat Category) string {
+    if cat.PageKind != "" {
+        return cat.PageKind
+    }
+    if cat.SubjectKind == "couple" { return "couple" }
+    if cat.SubjectKind == "pet"    { return "pet" }
+    switch cat.ID {
+    case "category-01": return "life_id"
+    case "category-02": return "child_id"
+    case "category-09": return "korean_id"
+    default:            return "headshot"
+    }
+}</code></pre>
+        <p><code>html.go</code> 的 <code>RenderGroupHTML</code> 随后做四件事：用 <code>Public()</code> 过滤掉停用项并剥掉私有 Prompt；把这一个子分类序列化成 <code>__PROFILE_CATEGORY_JSON__</code>；读 <code>guides.json</code> 和（仅双人时）<code>couple_assets.json</code>；最后按条件选布局、拼 CSS，用 <code>strings.NewReplacer</code> 单遍替换进外壳 <code>category.html</code>。单遍替换是刻意的——注释写明用户可控字符串不能再注入第二个模板标记，杜绝二次替换。</p>
+        <pre><code>replacements := map[string]string{
+    "__PROFILE_CATEGORY_JSON__": string(data),
+    "__PROFILE_GUIDES_JSON__":   string(guideData),
+    "__PROFILE_COUPLE_JSON__":   "{}",
+}
+// ... 按条件选 uploadLayout、注入 couple/single 专属 CSS 后：
+pairs := []string{}
+for k, v := range replacements { pairs = append(pairs, k, v) }
+return []byte(strings.NewReplacer(pairs...).Replace(string(shell))), nil</code></pre>
+        <p>外壳只留七个洞，数据以 JS 常量形式内联，页面打开即渲染、不再请求接口：</p>
+        <pre><code>&lt;style&gt;__PROFILE_CSS__&lt;/style&gt;
+&lt;section id="style-page"&gt;__PROFILE_BODY_HTML__&lt;/section&gt;__PROFILE_UPLOAD_HTML__
+&lt;script&gt;'use strict';
+const INITIAL=__PROFILE_CATEGORY_JSON__;
+const GUIDES=__PROFILE_GUIDES_JSON__;
+const COUPLE=__PROFILE_COUPLE_JSON__;
+__PROFILE_JS__
+&lt;/script&gt;</code></pre>
+        <p>CSS 是按需叠上去的：<code>page.css</code> 加 <code>loading.css</code> 是底，<code>couple.css</code> 仅 <code>SubjectKind == "couple"</code> 时追加，<code>single.css</code> 仅 <code>UploadMode == "single"</code> 时追加——老版本 APP 还能退回手写上传表单。</p>
+
+        <h2>单人与双人布局，差在哪</h2>
+        <p><code>page_types.json</code> 里 9 种页面类型，绝大多数共用同一套骨架：<code>portrait.html</code>（求职/生日/衣橱/旅拍）就是「一行 eyebrow 文案 + 一张 hero 案例图 + 横排造型缩略图 + 一个制作按钮」；<code>life.html</code>、<code>child.html</code>、<code>certificate.html</code>、<code>pet.html</code> 只是在这套骨架上加一行提示语或一排标签。<code>couple.html</code> 是唯一彻底重写的：结婚登记照用了酒红底色、「与挚爱同入画中」的衬线大标题、一封旋转的 FOR YOU 信笺、左右双人原图对照、一张斜贴的效果照，下面才是「多种服装可选择」的三列服装墙——对应 <code>couple.css</code> 里 <code>html[data-layout=couple]</code> 整作用域的换肤。</p>
+        <p>上传区也分三套模板：默认 <code>upload.html</code> 是内嵌步骤表单；<code>single_upload.html</code> 是从底部弹出的全屏 sheet（<code>single.css</code> 里 <code>[data-upload-mode=single] #upload-page{position:fixed;inset:0;...}</code>）；<code>couple_upload.html</code> 是左右双栏「左侧人物 / 右侧人物」对话框。运行时 <code>page.js</code> 再分流：<code>isCouple()</code>、<code>isSinglePhoto()</code>、<code>isSheet()</code> 三个判定决定走哪种交互动线；案例轮播 <code>buildCaseCarousel()</code> 对双人直接 <code>return</code>，婚礼构图不许滑走。</p>
+
+        <h2>尺寸适配：生图像素校验与证件照规格表</h2>
+        <p>形象照出图尺寸由 <code>generation_size.go</code> 把关。Seedream 5.0 Pro 对面积有硬上限（注释里写死：超过 <code>4624220</code> 像素会报 <code>InvalidParameter</code>），默认值取 1920×2400（4:5）。它只校验、绝不静默 clamp 或改比例：</p>
+        <pre><code>const (
+    DefaultGenerationWidth  = 1920 // 4:5, 4608000 pixels
+    DefaultGenerationHeight = 2400
+    MinGenerationPixels     = 1048576
+    MaxGenerationPixels     = 4624220
+    maxGenerationSide       = 16777216
+)
+
+func GenerationSize(width, height int) (string, error) {
+    // ... 逐一边界校验，任一不满足都把原因拼进 error 返回，
+    // 例如 "总像素xxx低于下限1048576"、"宽高比不在1/16～16范围内"
+    return fmt.Sprintf("%dx%d", width, height), nil
+}</code></pre>
+        <p>证件照那边是另一套逻辑——不管生成模型，只管成品交付。<code>idphotocatalog/defaults.json</code> 内嵌为兜底默认值，每条规格就是 <code>Spec</code> 一行：物理毫米、像素、KB 区间：</p>
+        <pre><code>type Spec struct {
+    ID         string `json:"id"`
+    CategoryID string `json:"category_id"`
+    Name       string `json:"name"`
+    WidthMm    int    `json:"width_mm"`
+    HeightMm   int    `json:"height_mm"`
+    WidthPx    int    `json:"width_px"`
+    HeightPx   int    `json:"height_px"`
+    MinKB      int    `json:"min_kb"`
+    MaxKB      int    `json:"max_kb"`
+    Custom     bool   `json:"custom"`
+}</code></pre>
+        <p>真实规格表里：一寸照 25×35mm / 295×413px / 100–200KB；二寸照 35×49mm / 413×579px / 100–200KB；小一寸 22×32mm / 260×378px；大一寸 33×48mm / 390×567px；小二寸 35×45mm / 413×531px；大二寸 35×53mm / 413×626px。毫米对应像素隐含约 300 DPI；值得说一句实话——这份 schema 里并没有 DPI 字段、也没有底色字段，换底色是裁切换底流程的事，目录只管「多大、多少 KB」，运营加新考试规格就是加一行 JSON。</p>
+
+        <h2>目录、参考图与 JSON 驱动</h2>
+        <p><code>profilephoto</code> 是 Category → Group → Variant 三级树，<code>Public()</code> 输出前会清空每个 Variant 的 Prompt、清空内嵌 Reference，并用 <code>ValidPublicURL</code> 强制所有案例图落在公共七牛域名——用户照片永远不能被发布成案例图。参考图张数也有硬约束：</p>
+        <pre><code>func ValidateReferenceCount(kind string, n int) error {
+    switch kind {
+    case "person": if n &gt;= 1 &amp;&amp; n &lt;= 9 { return nil }
+    case "pet":    if n &gt;= 1 &amp;&amp; n &lt;= 4 { return nil }
+    case "couple": if n == 2            { return nil }
+    }
+    return errors.New("单人支持1～9张同一人照片，萌宠1～4张同一宠物照片，双人需左右人物各1张")
+}</code></pre>
+        <p><code>ReferencePrompt</code> 还会把模板里原本指向「图2」的案例图改号成「图 n+1」，再在前面拼一段「图1是正面主参考，图2至图n是同一个人的辅助参考，图n+1是服务端案例图仅参考服装布景」的分配说明——多图身份一致性就靠这段约束。证件照侧的 <code>idphotocatalog/references.go</code> 用 <code>AIConfig.Image</code> 固定为 <code>["{picture}", 案例图]</code> 两张图，并对款式图对的每次修改做 sha256 版本乐观锁，只准换图、不准顺手改 Prompt 和积分。</p>
+        <p>三份 JSON 各司其职：<code>page_types.json</code> 驱动文案与交互模式（运营改标题、强调色、上传张数不用发版）；<code>guides.json</code> 存 person/pet/child 各两组「正确/错误示例」图 URL，<code>page.js</code> 按主体类型拼 key 渲染对错墙；<code>couple_assets.json</code> 只服务双人——每组服装的左右原图示例 <code>originals</code> 和换装前后双图 <code>outfits{source_url, url}</code>，都按 groupID 组织。</p>
+
+        <h2>权衡</h2>
+        <ul>
+          <li>选「单遍字符串替换」而不是模板引擎：零依赖、天然防注入，代价是布局只能靠静态 HTML + <code>page.js</code> 状态机驱动，交互复杂度都压在那一个 JS 文件里。</li>
+          <li>服务端拼 HTML 牺牲了前端工程化，换来的是造型库即配即上线、每个子分类独立 URL、私有 Prompt 永不落地——对一个 Prompt 就是钱的工具，这笔交易是值的。</li>
+          <li>尺寸校验宁可报错也不悄悄变形：生图超面积直接返回原因，证件照规格毫米/像素/KB 三对齐——比例错了，修图就成了废品。</li>
+        </ul>
+        <blockquote><p>把页面当数据、把模板当资产：服务端只做「按子分类挑布局、拼数据、拼 CSS」这一件事，文案归 JSON、交互归一份 JS、规格归一张表——于是形象照能长出血统各异的单人/双人页面，而证件照几百条尺寸，加一行配置就上线了。</p></blockquote>
+      </div>
+    </article>
+    <script src="/assets/js/main.js"></script>
+  </body>
+</html>
