@@ -1,5 +1,15 @@
 [
   {
+    "title": "个人感悟",
+    "href": "/posts/view.html?f=2026-10-19-personal-reflections",
+    "date": "2026-10-19",
+    "tags": [
+      "随笔"
+    ],
+    "excerpt": "在考研与就业的岔路口，在技术更迭的浪潮里，学着与迷茫同行，依旧心怀山海。",
+    "isNew": true
+  },
+  {
     "title": "博客改造：只写 Markdown，剩下的交给脚本与 Actions",
     "href": "/posts/view.html?f=2026-10-13-markdown-publishing",
     "date": "2026-10-13",
