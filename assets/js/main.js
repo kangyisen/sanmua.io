@@ -21,6 +21,7 @@
     var links = [
       { href: "/", label: "首页" },
       { href: "/#journal", label: "手记" },
+      { href: "/archives.html", label: "归档" },
       { href: "/docs/shuxue/shuxue.html", label: "数学" },
       { href: "/qisimiaoxiang/qisimiaoxiang.html", label: "灵感" },
       { href: "/friends.html", label: "友链" },
@@ -174,27 +175,59 @@
       随笔: ["✎", "LIFE NOTES", "life"],
       杂项: ["✳", "IDEAS", "life"],
     };
+    // 首页筛选按归一化后的 category；旧索引没有该字段时按标签兜底推断。
+    function categoryOf(post) {
+      if (post.category) return post.category;
+      var tags = post.tags || [];
+      if (tags.includes("数据库")) return "数据库";
+      if (tags.includes("数学")) return "数学";
+      if (tags.includes("随笔") || tags.includes("杂项")) return "随笔";
+      return "编程";
+    }
+    // 全文搜索索引（/data/search.json）懒加载：首次聚焦/输入搜索框时才拉取。
+    var fullText = null,
+      fullTextLoading = null;
+    function ensureFullText() {
+      if (fullText || fullTextLoading) return fullTextLoading;
+      fullTextLoading = fetch("/data/search.json")
+        .then(function (response) {
+          if (!response.ok) throw new Error("no search index");
+          return response.json();
+        })
+        .then(function (list) {
+          fullText = {};
+          (Array.isArray(list) ? list : []).forEach(function (entry) {
+            if (entry && entry.href) fullText[entry.href] = entry.content || "";
+          });
+        })
+        .catch(function () {
+          fullText = {};
+        })
+        .then(function () {
+          if (search.value.trim()) render();
+        });
+      return fullTextLoading;
+    }
+    search.addEventListener("focus", ensureFullText);
     function render() {
       var query = search.value.trim().toLocaleLowerCase();
       var results = posts.filter(function (post) {
-        var tags = post.tags || [];
-        var matchesCategory =
-          category === "全部" ||
-          tags.includes(category) ||
-          (category === "随笔" && tags.includes("杂项"));
+        var matchesCategory = category === "全部" || categoryOf(post) === category;
+        if (!matchesCategory) return false;
+        if (!query) return true;
+        var content = (fullText && fullText[post.href]) || "";
         return (
-          matchesCategory &&
-          [post.title, post.excerpt || "", tags.join(" ")]
+          [post.title, post.excerpt || "", (post.tags || []).join(" "), content]
             .join(" ")
             .toLocaleLowerCase()
-            .includes(query)
+            .includes(query) || false
         );
       });
       box.replaceChildren();
       count.textContent = results.length + " / " + posts.length + " 篇手记";
       results.forEach(function (post, index) {
         var featured = index === 0 && category === "全部" && !query;
-        var tag = (post.tags || [])[0] || "随笔";
+        var tag = (post.tags || [])[0] || categoryOf(post);
         var link = element(
           "a",
           "post-item" + (featured ? " post-item--featured" : ""),
@@ -218,7 +251,7 @@
           element("span", "", "阅读全文 ↗"),
         );
         content.appendChild(bottom);
-        var artwork = illustrations[tag] || illustrations["随笔"];
+        var artwork = illustrations[categoryOf(post)] || illustrations["随笔"];
         var art = element(
           "div",
           "post-art post-art--" + artwork[2],
