@@ -19,7 +19,7 @@
 
       <div class="article-body">
         <h2>背景：两套环境，一条流水线</h2>
-        <p>「一秒修图」后台基于 gin-vue-admin（GVA）二开，但线上并不是 GVA 那套 docker-compose 全家桶。真实拓扑是分裂的：日常开发跑在 <code>123.57.222.105</code>，前端是 1Panel 管理的静态站点（目录 <code>/opt/1panel/www/sites/123.57.222.105/index</code>），后端是一个叫 <code>aizaotu-server</code> 的 Docker 容器，监听 <code>8889</code>；生产跑在 <code>114.215.189.118</code>，前端是 <code>/www/wwwroot/aizaotu/dist</code> 的静态文件，后端是 systemd 服务 <code>Zaotu</code> 拉起的 Linux 静态二进制 <code>main</code>，监听 <code>8888</code>，对外域名 <code>https://interface.zaotuai.cn</code>。</p>
+        <p>「一秒修图」后台基于 gin-vue-admin（GVA）二开，但线上并不是 GVA 那套 docker-compose 全家桶。真实拓扑是分裂的：日常开发跑在 <code>123.57.*.*</code>，前端是 1Panel 管理的静态站点（目录 <code>/opt/1panel/www/sites/<dev>/index</code>），后端是一个叫 <code>aizaotu-server</code> 的 Docker 容器，监听 <code>8889</code>；生产跑在 <code>114.215.*.*</code>，前端是 <code>/www/wwwroot/***/dist</code> 的静态文件，后端是 systemd 服务 <code>Zaotu</code> 拉起的 Linux 静态二进制 <code>main</code>，监听 <code>8888</code>，对外域名 <code>https://interface.****.cn</code>。</p>
         <p>所有自动化都收敛在仓库根目录的 <code>.cnb.yml</code> 里，跑在 CNB（cnb.build）上。这篇文章就拆开这份真实配置看：它怎么按改动范围决定部署动作、怎么把 develop 自动送进生产、怎么解决「后台菜单是运营在 develop 库里手改的」这个老问题，以及发版失败后怎么一把滚回去。</p>
 
         <h2>为什么要分环境、分动作</h2>
@@ -110,7 +110,7 @@ systemctl stop "$service"
 cp -a "$stage/unpacked/." "$server_dir/"
 chmod 755 "$server_dir/main"
 systemctl start "$service"</code></pre>
-        <p>服务起来后有两级健康检查：本机先轮询 30 次 <code>http://127.0.0.1:8888/health</code> 必须返回 200，再从公网打 <code>https://interface.zaotuai.cn/api/health</code>（带 <code>--retry 3</code>）确认链路通：</p>
+        <p>服务起来后有两级健康检查：本机先轮询 30 次 <code>http://127.0.0.1:8888/health</code> 必须返回 200，再从公网打 <code>https://interface.****.cn/api/health</code>（带 <code>--retry 3</code>）确认链路通：</p>
         <pre><code>healthy=0
 for attempt in {1..30}; do
   if systemctl is-active --quiet "$service" &amp;&amp;
@@ -158,7 +158,7 @@ trap rollback EXIT</code></pre>
 
         <h2>镜像与 Nginx：开发走容器，生产走裸二进制</h2>
         <p>开发环境的镜像就是 <code>server/Dockerfile</code>：多阶段构建，<code>golang:alpine</code> 编译后丢进 <code>alpine:latest</code>，设 <code>TZ=Asia/Shanghai</code>，<code>EXPOSE 8889</code>，入口 <code>./server -c config.docker.yaml</code>——而这个 <code>config.docker.yaml</code> 在运行时被宿主机的 runtime 配置只读挂载覆盖。仓库里 <code>deploy/docker/Dockerfile</code>（centos:7 里同时跑 mysqld、redis、nginx 的 all-in-one）和 <code>docker-compose.yaml</code>（gva-web/gva-server/gva-mysql 那套）其实是 GVA 上游遗留，真实生产早已不用，只留作本地开发参考。</p>
-        <p>生产 Nginx（<code>nginx.conf</code>）本身不参与部署流程——流水线明确不碰它。要点只有几个：静态根 <code>/www/wwwroot/aizaotu/dist</code>，<code>/api/</code> 反代到 <code>127.0.0.1:8888</code>，且 <code>proxy_pass</code> 结尾的 <code>/</code> 用来做前缀剥离，配置里专门注释警告不要加 <code>rewrite ... break</code>（会和 location 内的 if 一起搞乱捕获组，导致 404）；<code>OPTIONS</code> 直接回 204；长连接业务把 <code>proxy_read_timeout</code> 放到 86400s：</p>
+        <p>生产 Nginx（<code>nginx.conf</code>）本身不参与部署流程——流水线明确不碰它。要点只有几个：静态根 <code>/www/wwwroot/***/dist</code>，<code>/api/</code> 反代到 <code>127.0.0.1:8888</code>，且 <code>proxy_pass</code> 结尾的 <code>/</code> 用来做前缀剥离，配置里专门注释警告不要加 <code>rewrite ... break</code>（会和 location 内的 if 一起搞乱捕获组，导致 404）；<code>OPTIONS</code> 直接回 204；长连接业务把 <code>proxy_read_timeout</code> 放到 86400s：</p>
         <pre><code>location /api/ {
     if ($request_method = 'OPTIONS') { return 204; }
     proxy_pass http://127.0.0.1:8888/;
