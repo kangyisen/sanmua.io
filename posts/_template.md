@@ -11,10 +11,13 @@ excerpt: 一句话摘要，显示在首页卡片上，建议 20-40 字。
   2. 上面 frontmatter：title、date 必填；tags、excerpt 建议填
        - tags 可写成 [a, b]，也可写成每行一个 "- a"
        - 常用标签：编程 / 数据库 / 数学 / 随笔 / Go / Python / AI / 架构 / 设计 / 支付 / 安全 / Docker
+       - 首页分类会自动归一化（Go/AI/架构等技术标签都归入「编程」），无需手动指定
   3. 正文从这里开始，不要写一级标题（大标题已由 title 生成），用 ## 分节
-  4. 保存后 git add、commit、push 到 666 分支，Actions 会自动更新首页索引
-  5. 本地预览：在博客根目录跑  python -m http.server，
-     浏览器打开 /posts/view.html?f=你的文件名（不含 .md）
+  4. 保存后 git add、commit、push 到 666 分支，Actions 会自动：
+       - 把文章预渲染成静态页 /posts/文件名/
+       - 更新首页索引、全文搜索索引、归档页、sitemap 与 RSS
+  5. 本地预览：在博客根目录先运行 python tools/build_index.py，
+     再起 python -m http.server，浏览器打开 /posts/你的文件名/（目录形式，不带 .md）
 -->
 
 开头第一段：用一两句话交代这篇文章要解决的问题、或项目背景。

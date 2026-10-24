@@ -1,16 +1,25 @@
-name: Markdown 索引自动生成
+name: 博客索引与静态页自动生成
 
-# 当 posts/ 下的 Markdown 文章（或生成脚本、旧索引）变化时，
-# 重新扫描 frontmatter 生成 data/posts.json，有变化则自动提交回 666。
-# 这样作者只需提交 .md 文件，首页索引无需手工维护。
+# 当文章（md 或旧 HTML）或构建脚本变化时，重新运行 build_index.py，产出：
+# - posts/<slug>/index.html   预渲染静态文章页
+# - data/posts.json           首页索引（含归一化 category）
+# - data/search.json          全文搜索索引
+# - archives.html / sitemap.xml / feed.xml
+# 有变化则自动提交回 666，作者只需提交 .md 文件。
 
 on:
   push:
     branches: [666]
     paths:
       - "posts/*.md"
+      - "posts/*.html"
       - "tools/build_index.py"
       - "data/posts.legacy.json"
+      - "sjk.html"
+      - "lao.html"
+      - "docs/*.html"
+      - "docs/shuxue/*.html"
+      - "qisimiaoxiang/*.html"
       - ".github/workflows/markdown-index.yml"
   workflow_dispatch:
 
@@ -33,17 +42,18 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: 扫描 Markdown 生成 posts.json
+      - name: 构建：预渲染文章页 + 索引 + sitemap/RSS/归档
         run: python tools/build_index.py
 
       - name: 有变化则提交并推送
         run: |
-          if git diff --quiet -- data/posts.json; then
-            echo "posts.json 无变化，跳过。"
+          git add data/posts.json data/search.json archives.html sitemap.xml feed.xml
+          git add -A posts/
+          if git diff --cached --quiet; then
+            echo "生成产物无变化，跳过。"
             exit 0
           fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/posts.json
-          git commit -m "chore: 自动更新 posts.json 索引（Markdown 扫描） [skip ci]"
+          git commit -m "chore: 自动更新文章静态页与索引（Markdown 扫描） [skip ci]"
           git push origin 666

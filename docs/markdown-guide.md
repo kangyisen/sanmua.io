@@ -39,32 +39,37 @@
    git push origin 666
    ```
 
-   push 之后，GitHub Actions 会自动运行 `tools/build_index.py` 更新
-   `data/posts.json` 并提交回来，几秒后首页即出现新文章。**只提交 .md 即可。**
+   push 之后，GitHub Actions 会自动运行 `tools/build_index.py`，把文章预渲染成
+   静态页并更新 `data/posts.json`、全文搜索索引、归档页、sitemap 和 RSS，
+   提交回来后几秒即上线。**只提交 .md 即可。**
 
 ## 本地预览
 
-在博客根目录启动静态服务器：
+先在博客根目录跑一次构建（生成静态文章页）：
 
 ```bash
+python tools/build_index.py
 python -m http.server 8000
 ```
 
-然后打开：
+然后打开（目录形式，不带 `.md`）：
 
 ```text
-http://127.0.0.1:8000/posts/view.html?f=2026-10-20-my-new-post
+http://127.0.0.1:8000/posts/2026-10-20-my-new-post/
 ```
-
-（`?f=` 后面是 md 文件名，不含 `.md`。）
 
 ## 说明 / 约定
 
-- 通用文章页是 `posts/view.html`：它 fetch 对应的 md，用 **marked** 渲染正文、
-  用 **highlight.js** 做代码高亮，样式由 `assets/css/article.css` 统一控制。
-- 首页索引是 `data/posts.json`，由脚本自动生成，**不要手工编辑**。
+- 每篇 md 都会在构建时预渲染成 `posts/<文件名>/index.html` 静态页：
+  独立 URL、独立的 title / description / og 分享卡片，SEO 友好；
+  代码高亮由 `highlight.min.js` + `highlight-run.js` 在页面加载后完成。
+- `posts/view.html?f=文件名` 旧链接仍然有效，会自动跳转到新静态页。
+- 首页索引是 `data/posts.json`，由脚本自动生成，**不要手工编辑**；
+  首页分类按 `category` 字段筛选（Go/AI/架构等技术标签自动归入「编程」）。
+- 全文搜索索引是 `data/search.json`（含 md 正文与旧 HTML 文章文本），
+  同样自动生成；RSS 在 `/feed.xml`，站点地图在 `/sitemap.xml`，归档页 `/archives.html`。
 - 旧的手写 HTML 文章固定在 `data/posts.legacy.json`；脚本会把它们合并在
   Markdown 文章之后。新增文章一律用 Markdown。
-- 根目录的 `.nojekyll` 让 GitHub Pages 关闭 Jekyll、把 `.md` 原样返回。
+- 根目录的 `.nojekyll` 让 GitHub Pages 关闭 Jekyll、目录形式的文章页可直接访问。
 - 相关文件：`tools/build_index.py`、`.github/workflows/markdown-index.yml`、
-  `assets/js/marked.min.js`、`assets/js/highlight.min.js`。
+  `assets/js/highlight.min.js`、`assets/js/highlight-run.js`。
