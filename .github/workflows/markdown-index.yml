@@ -9,11 +9,17 @@ name: 博客索引与静态页自动生成
 
 on:
   push:
-    branches: [666]
+    branches: ["666"]
     paths:
       - "posts/*.md"
       - "posts/*.html"
       - "tools/build_index.py"
+      - "tools/check_site.py"
+      - "assets/**"
+      - "index.html"
+      - "friends.html"
+      - "404.html"
+      - "CNAME"
       - "data/posts.legacy.json"
       - "sjk.html"
       - "lao.html"
@@ -36,6 +42,8 @@ jobs:
     steps:
       - name: 检出仓库
         uses: actions/checkout@v4
+        with:
+          ref: "666"
 
       - name: 安装 Python
         uses: actions/setup-python@v5
@@ -45,10 +53,14 @@ jobs:
       - name: 构建：预渲染文章页 + 索引 + sitemap/RSS/归档
         run: python tools/build_index.py
 
+      - name: 检查站内资源、文章索引、搜索与 XML
+        run: python tools/check_site.py
+
       - name: 有变化则提交并推送
         run: |
           git add data/posts.json data/search.json archives.html sitemap.xml feed.xml
           git add -A posts/
+          git add -u -- '*.html'
           if git diff --cached --quiet; then
             echo "生成产物无变化，跳过。"
             exit 0

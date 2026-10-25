@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI 游戏工程的在线构建、发布与权限设计 · sanmua</title>
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
-    <script src="/assets/js/theme.js"></script>
-    <link rel="stylesheet" href="/assets/css/main.css" />
-    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+    <script src="/assets/js/theme.js?v=fc11f2677e"></script>
+    <link rel="stylesheet" href="/assets/css/main.css?v=648a5dd28b" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=73ff93b1c9" />
   </head>
   <body>
     <article class="prose">
@@ -135,6 +135,6 @@ func RequirePermission(obj, act string) gin.HandlerFunc {
         <blockquote><p>核心经验：<strong>JWT 负责「你是谁」，Casbin 负责「你能做什么」，策略挂角色、用户用 g 继承</strong>。在线构建本质是个异步状态机，慢操作一律任务化，配合信号量并发上限、context 取消和僵尸任务定时兜底；权限必须落到后端接口，前端显示只是顺带。加角色、开菜单因此成了配置问题，而不是开发任务。</p></blockquote>
       </div>
     </article>
-    <script src="/assets/js/main.js"></script>
+    <script src="/assets/js/main.js?v=9b3f67174b"></script>
   </body>
 </html>

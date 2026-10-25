@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Redis 分布式锁在订单、积分、续期、背包里的真实用法 · sanmua</title>
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
-    <script src="/assets/js/theme.js"></script>
-    <link rel="stylesheet" href="/assets/css/main.css" />
-    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+    <script src="/assets/js/theme.js?v=fc11f2677e"></script>
+    <link rel="stylesheet" href="/assets/css/main.css?v=648a5dd28b" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=73ff93b1c9" />
   </head>
   <body>
     <article class="prose">
@@ -120,6 +120,6 @@ return errors2.ErrorSystemBusy</code></pre>
         <blockquote><p>核心经验：<strong>分布式锁负责「减少冲突、提升吞吐」，数据库约束负责「最终正确」</strong>。锁会超时、会丢、会因网络分区失效，但唯一索引和条件更新不会骗你。永远别把锁当成一致性的唯一保障。</p></blockquote>
       </div>
     </article>
-    <script src="/assets/js/main.js"></script>
+    <script src="/assets/js/main.js?v=9b3f67174b"></script>
   </body>
 </html>

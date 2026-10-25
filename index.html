@@ -17,10 +17,11 @@
     <meta property="og:url" content="https://www.sanmua.xin/" />
     <meta property="og:image" content="https://www.sanmua.xin/assets/og-image.png" />
     <meta name="twitter:card" content="summary_large_image" />
+    <link rel="canonical" href="https://www.sanmua.xin/" />
     <link rel="alternate" type="application/rss+xml" title="sanmua" href="/feed.xml" />
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
-    <script src="/assets/js/theme.js"></script>
-    <link rel="stylesheet" href="/assets/css/main.css" />
+    <script src="/assets/js/theme.js?v=fc11f2677e"></script>
+    <link rel="stylesheet" href="/assets/css/main.css?v=648a5dd28b" />
   </head>
   <body>
     <a class="skip-link" href="#main">跳到主要内容</a>
@@ -76,19 +77,42 @@
         <span data-greet>欢迎来到我的数字自留地</span
         ><span>不赶路，感受路。 <span aria-hidden="true">↘</span></span>
       </div>
+      <nav class="topic-paths" aria-label="探索手记专题">
+        <a class="topic-path" href="/?category=编程#journal" data-topic="编程">
+          <span class="topic-path__icon" aria-hidden="true">&lt;/&gt;</span>
+          <span><strong>代码与构建</strong><small>把想法变成可以运行的世界</small></span>
+          <span class="topic-path__count" data-topic-count="编程">↗</span>
+        </a>
+        <a class="topic-path" href="/?category=数据库#journal" data-topic="数据库">
+          <span class="topic-path__icon" aria-hidden="true">▤</span>
+          <span><strong>数据与秩序</strong><small>从一条查询开始理解系统</small></span>
+          <span class="topic-path__count" data-topic-count="数据库">↗</span>
+        </a>
+        <a class="topic-path" href="/?category=数学#journal" data-topic="数学">
+          <span class="topic-path__icon" aria-hidden="true">∑</span>
+          <span><strong>数学与逻辑</strong><small>在推导之间，发现另一种美</small></span>
+          <span class="topic-path__count" data-topic-count="数学">↗</span>
+        </a>
+        <a class="topic-path" href="/?category=随笔#journal" data-topic="随笔">
+          <span class="topic-path__icon" aria-hidden="true">✳</span>
+          <span><strong>生活与灵感</strong><small>给日常留一点自由的空白</small></span>
+          <span class="topic-path__count" data-topic-count="随笔">↗</span>
+        </a>
+      </nav>
       <div class="content-layout">
         <section class="journal" id="journal" aria-labelledby="journal-title">
           <header class="section-heading">
             <div>
               <p class="eyebrow">THE JOURNAL</p>
               <h2 id="journal-title">
-                最近写下的<span class="heading-dot">.</span>
+                手记，持续生长<span class="heading-dot">.</span>
               </h2>
             </div>
             <span class="post-count" id="postCount" role="status"
               >手记归档</span
             >
           </header>
+          <div id="latestPost" class="journal-feature" hidden></div>
           <div class="journal-tools">
             <div class="filters" aria-label="按文章分类筛选">
               <button
@@ -128,16 +152,29 @@
                 随笔与灵感
               </button>
             </div>
-            <label class="search-box"
-              ><span aria-hidden="true">⌕</span
-              ><input
+          </div>
+          <div class="search-toolbar">
+            <div class="search-box" role="search">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+              <input
                 type="search"
                 id="postSearch"
-                placeholder="搜索手记…"
+                placeholder="搜索标题、标签或正文…"
                 aria-label="搜索文章"
-            /></label>
+                aria-controls="postList"
+                autocomplete="off"
+              />
+              <kbd aria-hidden="true">/</kbd>
+            </div>
+            <label class="sort-control"><span class="sr-only">文章排序</span><select id="postSort" aria-label="文章排序"><option value="newest">最新在前</option><option value="oldest">最早在前</option></select></label>
           </div>
-          <div class="js-posts post-list"><p>正在翻开手记…</p></div>
+          <p class="search-status" id="searchStatus" role="status" aria-live="polite" aria-atomic="true">每一篇，都是好奇心留下的脚印。</p>
+          <div class="js-posts post-list" id="postList" aria-label="手记列表"><p>正在翻开手记…</p></div>
+          <div class="journal-pagination" id="postPagination" hidden>
+            <p id="browseStatus"></p>
+            <button class="load-more" id="loadMore" type="button" aria-controls="postList">再翻几篇 <span aria-hidden="true">↓</span></button>
+            <a class="text-link" href="/archives.html">查看完整归档 <span aria-hidden="true">↗</span></a>
+          </div>
           <noscript
             ><p>开启 JavaScript 可搜索和筛选文章，也可以直接阅读：</p>
             <ul>
@@ -197,6 +234,13 @@
             <p>热爱可抵<br />岁月漫长。</p>
             <small>A gentle reminder.</small>
           </div>
+          <section class="subscribe-card" aria-labelledby="subscribe-title">
+            <span class="subscribe-icon" aria-hidden="true">◔</span>
+            <p class="eyebrow">LET'S STAY CURIOUS</p>
+            <h2 id="subscribe-title">下次更新，再见。</h2>
+            <p>把手记放进你的 RSS 阅读器，让新文章轻轻抵达。</p>
+            <a href="/feed.xml">订阅我的手记 <span aria-hidden="true">↗</span></a>
+          </section>
         </aside>
       </div>
       <div class="closing-note">
@@ -205,6 +249,6 @@
         <small>THANKS FOR STOPPING BY</small>
       </div>
     </main>
-    <script src="/assets/js/main.js"></script>
+    <script src="/assets/js/main.js?v=9b3f67174b"></script>
   </body>
 </html>

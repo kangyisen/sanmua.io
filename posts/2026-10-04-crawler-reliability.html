@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>采集可靠性：outbox、崩溃恢复、优雅停机与看门狗 · sanmua</title>
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
-    <script src="/assets/js/theme.js"></script>
-    <link rel="stylesheet" href="/assets/css/main.css" />
-    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+    <script src="/assets/js/theme.js?v=fc11f2677e"></script>
+    <link rel="stylesheet" href="/assets/css/main.css?v=648a5dd28b" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=73ff93b1c9" />
   </head>
   <body>
     <article class="prose">
@@ -124,6 +124,6 @@ return "alive"
         <blockquote><p>核心经验：<strong>可靠性的本质是"任何时刻进程突然死掉，系统都能从磁盘上的状态自愈"</strong>。outbox 先落库不丢任务，WAL 让 SQLite 在 asyncio 下不卡不锁，优雅停机不腰斩在途任务，看门狗 + 幂等重放让卡死任务不被遗忘、也不被重复发。跨存储状态以 outbox 为准——Redis 会误报，SQLite 的条件更新不会。</p></blockquote>
       </div>
     </article>
-    <script src="/assets/js/main.js"></script>
+    <script src="/assets/js/main.js?v=9b3f67174b"></script>
   </body>
 </html>

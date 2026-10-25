@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>四账户积分记账：余额、冻结、乐观锁与消费优先级 · sanmua</title>
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
-    <script src="/assets/js/theme.js"></script>
-    <link rel="stylesheet" href="/assets/css/main.css" />
-    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+    <script src="/assets/js/theme.js?v=fc11f2677e"></script>
+    <link rel="stylesheet" href="/assets/css/main.css?v=648a5dd28b" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=73ff93b1c9" />
   </head>
   <body>
     <article class="prose">
@@ -122,6 +122,6 @@ ReleaseFrozenPoints(...)        // 释放：退回 frozen_*，恢复额度</code
         <blockquote><p>这套设计的核心有两条：<strong>不同生命周期的钱必须放进不同账户</strong>，一个字段存所有积分，迟早会在过期规则和对账上爆炸；以及<strong>「冻结占额 + 乐观锁 + 全条件 UPDATE」</strong>共同保证并发下不超扣、不错扣。余额会骗人，带条件的更新和流水不会。</p></blockquote>
       </div>
     </article>
-    <script src="/assets/js/main.js"></script>
+    <script src="/assets/js/main.js?v=9b3f67174b"></script>
   </body>
 </html>

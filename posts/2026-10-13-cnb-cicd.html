@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CNB CI/CD：分环境部署、菜单同步与备份回滚 · sanmua</title>
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
-    <script src="/assets/js/theme.js"></script>
-    <link rel="stylesheet" href="/assets/css/main.css" />
-    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+    <script src="/assets/js/theme.js?v=fc11f2677e"></script>
+    <link rel="stylesheet" href="/assets/css/main.css?v=648a5dd28b" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=73ff93b1c9" />
   </head>
   <body>
     <article class="prose">
@@ -181,6 +181,6 @@ trap rollback EXIT</code></pre>
         <blockquote><p>CI/CD 的价值不在于「点一下按钮就发版」，而在于把发版拆成可证明安全的步骤：先按改动范围少做事，再在停服前备份、健康检查后才宣布成功、失败时由 trap 自动退回到上一秒。菜单会漂移、密钥不能进镜像、editor 不能被覆盖——这些脏约束，最终都变成了 <code>.cnb.yml</code> 里一行行可以被 Review 的 shell。</p></blockquote>
       </div>
     </article>
-    <script src="/assets/js/main.js"></script>
+    <script src="/assets/js/main.js?v=9b3f67174b"></script>
   </body>
 </html>

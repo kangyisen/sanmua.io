@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>asyncio 两级并发：高吞吐采集器的并发模型与热同步 · sanmua</title>
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
-    <script src="/assets/js/theme.js"></script>
-    <link rel="stylesheet" href="/assets/css/main.css" />
-    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+    <script src="/assets/js/theme.js?v=fc11f2677e"></script>
+    <link rel="stylesheet" href="/assets/css/main.css?v=648a5dd28b" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=73ff93b1c9" />
   </head>
   <body>
     <article class="prose">
@@ -114,6 +114,6 @@ async def crawl_one(name: str, cfg: dict, job: dict,
         <blockquote><p>核心经验：<strong>并发不是"开越多协程越快"，而是"全局控源数、单源控在途、队列做背压、配置在线可调"</strong>。两层信号量 + worker 不是重复造墙，而是分别兜住"对外礼貌"和"内部扇出"；429 退避必须有上限，退避用完放回队尾而不是吞掉任务——被生产环境教出来的细节，都是血泪。</p></blockquote>
       </div>
     </article>
-    <script src="/assets/js/main.js"></script>
+    <script src="/assets/js/main.js?v=9b3f67174b"></script>
   </body>
 </html>

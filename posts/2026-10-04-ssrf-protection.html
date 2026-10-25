@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>自研 SSRF 防护层：把 URL 抓取关进笼子 · sanmua</title>
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
-    <script src="/assets/js/theme.js"></script>
-    <link rel="stylesheet" href="/assets/css/main.css" />
-    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+    <script src="/assets/js/theme.js?v=fc11f2677e"></script>
+    <link rel="stylesheet" href="/assets/css/main.css?v=648a5dd28b" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=73ff93b1c9" />
   </head>
   <body>
     <article class="prose">
@@ -131,6 +131,6 @@ def check_port_and_meta(u) -&gt; None:
         <blockquote><p>核心经验：<strong>SSRF 防护没有"一次校验就万事大吉"，它是一串必须层层独立成立的闸门</strong>。协议、userinfo、IP 伪装归一、公网归属、DNS 一致性、每一跳重定向、元数据与端口——任何一层偷懒前面全白费。HTTPS 锁 IP 时别忘带 SNI，否则安全做到了、请求却连不通。把 URL 抓取关进笼子，就是让它无论如何都跑不出你画好的那个公网白名单。</p></blockquote>
       </div>
     </article>
-    <script src="/assets/js/main.js"></script>
+    <script src="/assets/js/main.js?v=9b3f67174b"></script>
   </body>
 </html>

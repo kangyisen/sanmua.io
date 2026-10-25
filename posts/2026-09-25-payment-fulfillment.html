@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>多渠道支付回调与幂等履约：订单管线设计笔记 · sanmua</title>
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
-    <script src="/assets/js/theme.js"></script>
-    <link rel="stylesheet" href="/assets/css/main.css" />
-    <link rel="stylesheet" href="/assets/css/article.css?v=b7e7317748" />
+    <script src="/assets/js/theme.js?v=fc11f2677e"></script>
+    <link rel="stylesheet" href="/assets/css/main.css?v=648a5dd28b" />
+    <link rel="stylesheet" href="/assets/css/article.css?v=73ff93b1c9" />
   </head>
   <body>
     <article class="prose">
@@ -154,6 +154,6 @@ pkg, err := subscribe.GetPackageByStoreProductId(op.AppId, op.ThirdProductId, pl
         <blockquote><p>支付系统的目标其实就一句话：<strong>无论回调来几次、乱序来、重复来，最终结果都和「来一次」完全一样</strong>。订单 / 履约状态机 + 分布式锁 + 两级幂等 + 履约快照凑齐，基本就稳了；而不同渠道「金额严格还是校正」这种差异，必须顺着各自的事实来源来，不能一刀切。</p></blockquote>
       </div>
     </article>
-    <script src="/assets/js/main.js"></script>
+    <script src="/assets/js/main.js?v=9b3f67174b"></script>
   </body>
 </html>

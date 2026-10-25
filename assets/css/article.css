@@ -17,7 +17,7 @@ body.typora-export {
 }
 
 /* 文章正文容器：居中限宽，留白舒适 */
-#write {
+:is(#write, .article-body) {
   max-width: var(--maxw-prose) !important;
   margin: 0 auto !important;
   padding-top: 48px !important;
@@ -28,12 +28,12 @@ body.typora-export {
 }
 
 /* 标题 */
-#write h1,
-#write h2,
-#write h3,
-#write h4,
-#write h5,
-#write h6 {
+:is(#write, .article-body) h1,
+:is(#write, .article-body) h2,
+:is(#write, .article-body) h3,
+:is(#write, .article-body) h4,
+:is(#write, .article-body) h5,
+:is(#write, .article-body) h6 {
   color: var(--text) !important;
   font-weight: 700 !important;
   letter-spacing: -0.01em;
@@ -41,43 +41,43 @@ body.typora-export {
   margin-bottom: 0.6em !important;
   line-height: 1.35 !important;
 }
-#write h1 {
+:is(#write, .article-body) h1 {
   font-size: 1.9em !important;
   border-bottom: 1px solid var(--border);
   padding-bottom: 0.4em;
 }
-#write h2 {
+:is(#write, .article-body) h2 {
   font-size: 1.45em !important;
 }
-#write h3 {
+:is(#write, .article-body) h3 {
   font-size: 1.2em !important;
 }
 
-#write p {
+:is(#write, .article-body) p {
   color: var(--text) !important;
 }
-#write strong {
+:is(#write, .article-body) strong {
   color: var(--text) !important;
   font-weight: 700;
 }
 
-#write a {
+:is(#write, .article-body) a {
   color: var(--accent) !important;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 
 /* 列表 */
-#write ul,
-#write ol {
+:is(#write, .article-body) ul,
+:is(#write, .article-body) ol {
   padding-left: 1.6em !important;
 }
-#write li {
+:is(#write, .article-body) li {
   margin: 0.3em 0 !important;
 }
 
 /* 引用块 */
-#write blockquote {
+:is(#write, .article-body) blockquote {
   border-left: 3px solid var(--accent) !important;
   background: var(--accent-soft) !important;
   color: var(--text-secondary) !important;
@@ -85,12 +85,12 @@ body.typora-export {
   margin: 1.2em 0 !important;
   border-radius: 0 8px 8px 0 !important;
 }
-#write blockquote p {
+:is(#write, .article-body) blockquote p {
   color: var(--text-secondary) !important;
 }
 
 /* 代码 */
-#write code {
+:is(#write, .article-body) code {
   font-family: var(--font-mono) !important;
   font-size: 0.88em !important;
   background: var(--bg-subtle) !important;
@@ -100,7 +100,7 @@ body.typora-export {
   color: var(--accent) !important;
 }
 /* Typora nests a <pre> for every CodeMirror line inside the outer <pre>. */
-#write pre:not(.CodeMirror pre) {
+:is(#write, .article-body) pre:not(.CodeMirror pre) {
   background: var(--code-bg) !important;
   color: var(--code-text) !important;
   border: 1px solid var(--code-border) !important;
@@ -114,7 +114,7 @@ body.typora-export {
   white-space: pre !important;
   tab-size: 4;
 }
-#write pre code {
+:is(#write, .article-body) pre code {
   background: transparent !important;
   border: none !important;
   padding: 0 !important;
@@ -145,14 +145,14 @@ body.typora-export {
   --code-number: #ffc089;
   --code-string: #add99c;
 }
-#write .CodeMirror {
+:is(#write, .article-body) .CodeMirror {
   background: transparent !important;
   color: var(--code-text) !important;
   font: inherit !important;
   height: auto !important;
   overflow: visible !important;
 }
-#write .CodeMirror pre {
+:is(#write, .article-body) .CodeMirror pre {
   background: transparent !important;
   border: 0 !important;
   border-radius: 0 !important;
@@ -168,67 +168,67 @@ body.typora-export {
   word-break: normal !important;
   overflow: visible !important;
 }
-#write .CodeMirror-lines {
+:is(#write, .article-body) .CodeMirror-lines {
   padding: 0 !important;
 }
-#write .CodeMirror-scroll {
+:is(#write, .article-body) .CodeMirror-scroll {
   overflow: visible !important;
 }
-#write .CodeMirror-activeline-background {
+:is(#write, .article-body) .CodeMirror-activeline-background {
   background: transparent !important;
 }
-#write :is(.CodeMirror, .code-block) .cm-comment,
-#write :is(.CodeMirror, .code-block) .cm-meta {
+:is(#write, .article-body) :is(.CodeMirror, .code-block) .cm-comment,
+:is(#write, .article-body) :is(.CodeMirror, .code-block) .cm-meta {
   color: var(--code-comment) !important;
 }
-#write :is(.CodeMirror, .code-block) .cm-keyword {
+:is(#write, .article-body) :is(.CodeMirror, .code-block) .cm-keyword {
   color: var(--code-keyword) !important;
 }
-#write :is(.CodeMirror, .code-block) .cm-def,
-#write :is(.CodeMirror, .code-block) .cm-builtin {
+:is(#write, .article-body) :is(.CodeMirror, .code-block) .cm-def,
+:is(#write, .article-body) :is(.CodeMirror, .code-block) .cm-builtin {
   color: var(--code-function) !important;
 }
-#write :is(.CodeMirror, .code-block) .cm-variable,
-#write :is(.CodeMirror, .code-block) .cm-operator {
+:is(#write, .article-body) :is(.CodeMirror, .code-block) .cm-variable,
+:is(#write, .article-body) :is(.CodeMirror, .code-block) .cm-operator {
   color: var(--code-text) !important;
 }
-#write :is(.CodeMirror, .code-block) .cm-variable-2,
-#write :is(.CodeMirror, .code-block) .cm-variable-3,
-#write :is(.CodeMirror, .code-block) .cm-type {
+:is(#write, .article-body) :is(.CodeMirror, .code-block) .cm-variable-2,
+:is(#write, .article-body) :is(.CodeMirror, .code-block) .cm-variable-3,
+:is(#write, .article-body) :is(.CodeMirror, .code-block) .cm-type {
   color: var(--code-type) !important;
 }
-#write :is(.CodeMirror, .code-block) .cm-number,
-#write :is(.CodeMirror, .code-block) .cm-atom {
+:is(#write, .article-body) :is(.CodeMirror, .code-block) .cm-number,
+:is(#write, .article-body) :is(.CodeMirror, .code-block) .cm-atom {
   color: var(--code-number) !important;
 }
-#write :is(.CodeMirror, .code-block) .cm-string,
-#write :is(.CodeMirror, .code-block) .cm-string-2 {
+:is(#write, .article-body) :is(.CodeMirror, .code-block) .cm-string,
+:is(#write, .article-body) :is(.CodeMirror, .code-block) .cm-string-2 {
   color: var(--code-string) !important;
 }
 
 /* 表格 */
-#write table {
+:is(#write, .article-body) table {
   width: 100% !important;
   border-collapse: collapse !important;
   margin: 1.2em 0 !important;
   font-size: 0.95em !important;
 }
-#write th,
-#write td {
+:is(#write, .article-body) th,
+:is(#write, .article-body) td {
   border: 1px solid var(--border) !important;
   padding: 8px 12px !important;
   color: var(--text) !important;
 }
-#write th {
+:is(#write, .article-body) th {
   background: var(--bg-subtle) !important;
   font-weight: 600 !important;
 }
-#write tr:nth-child(even) td {
+:is(#write, .article-body) tr:nth-child(even) td {
   background: var(--bg-subtle) !important;
 }
 
 /* 图片 */
-#write img {
+:is(#write, .article-body) img {
   max-width: 100% !important;
   height: auto !important;
   border-radius: var(--radius-md) !important;
@@ -237,14 +237,14 @@ body.typora-export {
 }
 
 /* 分隔线 */
-#write hr {
+:is(#write, .article-body) hr {
   border: none !important;
   border-top: 1px solid var(--border) !important;
   margin: 2.5em 0 !important;
 }
 
 /* 深色下 mermaid / 导出的白色 SVG 背景适配 */
-[data-theme="dark"] #write {
+[data-theme="dark"] :is(#write, .article-body) {
   filter: none;
 }
 
@@ -252,24 +252,25 @@ body.typora-export {
 body.typora-export {
   font-family: var(--font-sans) !important;
 }
-#write {
+:is(#write, .article-body) {
   padding-left: 0 !important;
   padding-right: 0 !important;
 }
-#write h1:first-child {
+:is(#write, .article-body) h1:first-child {
   margin-top: 0 !important;
   font-family: var(--font-serif);
   font-weight: 500 !important;
 }
-#write :is(h1, h2, h3, h4, h5, h6) {
-  scroll-margin-top: 110px;
+:is(#write, .article-body) :is(h1, h2, h3, h4, h5, h6) {
+  /* The document already reserves 110px with scroll-padding-top. */
+  scroll-margin-top: 16px;
 }
-#write table {
+:is(#write, .article-body) table {
   display: block;
   overflow-x: auto;
 }
-#write td,
-#write th {
+:is(#write, .article-body) td,
+:is(#write, .article-body) th {
   min-width: 100px;
 }
 @media (max-width: 540px) {
@@ -277,7 +278,7 @@ body.typora-export {
     padding-left: 22px !important;
     padding-right: 22px !important;
   }
-  #write {
+  :is(#write, .article-body) {
     padding-top: 28px !important;
     font-size: 16px !important;
   }
@@ -292,68 +293,341 @@ body.typora-export {
 /* ============================================================
    highlight.js 代码高亮（posts/view.html 渲染 Markdown 时使用）
    颜色复用上方 --code-* 变量，与 CodeMirror 主题一致。
-   因 #write pre code 用了 !important，这里也用 !important。
+   因 :is(#write, .article-body) pre code 用了 !important，这里也用 !important。
    ============================================================ */
-#write pre code.hljs {
+:is(#write, .article-body) pre code.hljs {
   padding: 0 !important;
   background: transparent !important;
 }
-#write .hljs-comment,
-#write .hljs-quote {
+:is(#write, .article-body) .hljs-comment,
+:is(#write, .article-body) .hljs-quote {
   color: var(--code-comment) !important;
   font-style: italic;
 }
-#write .hljs-keyword,
-#write .hljs-selector-tag,
-#write .hljs-doctag,
-#write .hljs-template-tag {
+:is(#write, .article-body) .hljs-keyword,
+:is(#write, .article-body) .hljs-selector-tag,
+:is(#write, .article-body) .hljs-doctag,
+:is(#write, .article-body) .hljs-template-tag {
   color: var(--code-keyword) !important;
 }
-#write .hljs-built_in,
-#write .hljs-literal,
-#write .hljs-type,
-#write .hljs-class .hljs-title,
-#write .hljs-title.class_ {
+:is(#write, .article-body) .hljs-built_in,
+:is(#write, .article-body) .hljs-literal,
+:is(#write, .article-body) .hljs-type,
+:is(#write, .article-body) .hljs-class .hljs-title,
+:is(#write, .article-body) .hljs-title.class_ {
   color: var(--code-type) !important;
 }
-#write .hljs-title,
-#write .hljs-title.function_,
-#write .hljs-function .hljs-title,
-#write .hljs-section {
+:is(#write, .article-body) .hljs-title,
+:is(#write, .article-body) .hljs-title.function_,
+:is(#write, .article-body) .hljs-function .hljs-title,
+:is(#write, .article-body) .hljs-section {
   color: var(--code-function) !important;
 }
-#write .hljs-string,
-#write .hljs-regexp,
-#write .hljs-attr,
-#write .hljs-attribute,
-#write .hljs-addition,
-#write .hljs-meta-string {
+:is(#write, .article-body) .hljs-string,
+:is(#write, .article-body) .hljs-regexp,
+:is(#write, .article-body) .hljs-attr,
+:is(#write, .article-body) .hljs-attribute,
+:is(#write, .article-body) .hljs-addition,
+:is(#write, .article-body) .hljs-meta-string {
   color: var(--code-string) !important;
 }
-#write .hljs-number,
-#write .hljs-symbol,
-#write .hljs-bullet,
-#write .hljs-variable,
-#write .hljs-template-variable,
-#write .hljs-link {
+:is(#write, .article-body) .hljs-number,
+:is(#write, .article-body) .hljs-symbol,
+:is(#write, .article-body) .hljs-bullet,
+:is(#write, .article-body) .hljs-variable,
+:is(#write, .article-body) .hljs-template-variable,
+:is(#write, .article-body) .hljs-link {
   color: var(--code-number) !important;
 }
-#write .hljs-name,
-#write .hljs-selector-class,
-#write .hljs-selector-id,
-#write .hljs-selector-attr,
-#write .hljs-selector-pseudo {
+:is(#write, .article-body) .hljs-name,
+:is(#write, .article-body) .hljs-selector-class,
+:is(#write, .article-body) .hljs-selector-id,
+:is(#write, .article-body) .hljs-selector-attr,
+:is(#write, .article-body) .hljs-selector-pseudo {
   color: var(--code-function) !important;
 }
-#write .hljs-meta {
+:is(#write, .article-body) .hljs-meta {
   color: var(--code-comment) !important;
 }
-#write .hljs-deletion {
+:is(#write, .article-body) .hljs-deletion {
   color: var(--code-keyword) !important;
 }
-#write .hljs-emphasis {
+:is(#write, .article-body) .hljs-emphasis {
   font-style: italic;
 }
-#write .hljs-strong {
+:is(#write, .article-body) .hljs-strong {
   font-weight: 700;
+}
+
+/* One reading rhythm for both hand-written posts and Typora exports. */
+.prose {
+  padding-top: 48px;
+}
+.prose__header {
+  padding-bottom: 30px;
+  margin-bottom: 32px;
+}
+.prose__title {
+  margin: 24px 0 20px;
+  font-size: clamp(28px, 3.2vw, 39px);
+  line-height: 1.5;
+  text-wrap: balance;
+}
+.prose__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.prose :is(#write, .article-body) {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+:is(#write, .article-body) {
+  overflow-wrap: anywhere;
+}
+:is(#write, .article-body) > p {
+  margin: 1.25em 0;
+}
+:is(#write, .article-body) > :first-child {
+  margin-top: 0;
+}
+:is(#write, .article-body) h2 {
+  padding-bottom: 0.5em;
+  border-bottom: 1px solid var(--border);
+}
+:is(#write, .article-body) :is(h1, h2, h3):focus {
+  outline: none;
+}
+:is(#write, .article-body) li::marker {
+  color: var(--accent);
+}
+:is(#write, .article-body) pre {
+  max-width: 100%;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+:is(#write, .article-body) pre code {
+  display: block;
+}
+:is(#write, .article-body) blockquote {
+  padding: 16px 22px !important;
+}
+:is(#write, .article-body) blockquote > :first-child {
+  margin-top: 0;
+}
+:is(#write, .article-body) blockquote > :last-child {
+  margin-bottom: 0;
+}
+.reading-summary {
+  max-width: var(--maxw-prose);
+  margin: 12px auto 0;
+  color: var(--text-secondary);
+  font: 12px/1.7 var(--font-sans);
+}
+.reading-outline {
+  max-width: var(--maxw-prose);
+  margin: 0 auto 32px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font: 13px/1.65 var(--font-sans);
+}
+.reading-summary + .reading-outline {
+  margin-top: 20px;
+}
+.reading-outline__summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+  min-height: 48px;
+}
+.reading-outline__summary::-webkit-details-marker {
+  display: none;
+}
+.reading-outline__summary::after {
+  content: "+";
+  margin-left: auto;
+  color: var(--accent);
+  font-size: 18px;
+  font-weight: 400;
+}
+.reading-outline[open] > .reading-outline__summary::after {
+  content: "−";
+}
+.reading-outline__count {
+  font: 11px var(--font-mono);
+  color: var(--text-tertiary);
+}
+.reading-outline__nav {
+  max-height: 45vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 12px 14px;
+  scrollbar-width: thin;
+}
+.reading-outline__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.reading-outline__item a {
+  display: block;
+  padding: 7px 10px;
+  border-left: 2px solid transparent;
+  border-radius: 0 5px 5px 0;
+  color: var(--text-secondary);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  transition: color 0.15s, background 0.15s;
+}
+.reading-outline__item a:hover,
+.reading-outline__item a[aria-current="location"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-left-color: var(--accent);
+}
+.reading-outline__item--nested a {
+  padding-left: 22px;
+  font-size: 12px;
+}
+.code-frame {
+  min-width: 0;
+  margin: 24px 0;
+  border: 1px solid var(--code-border);
+  border-radius: 10px;
+  background: var(--code-bg);
+  overflow: hidden;
+}
+.code-frame__toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 10px 6px 18px;
+  border-bottom: 1px solid var(--code-border);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font: 11px/1.5 var(--font-mono);
+}
+.code-frame__language {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.code-copy {
+  min-height: 34px;
+  padding: 5px 9px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: 11px/1.5 var(--font-sans);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.code-copy:hover {
+  color: var(--accent);
+  border-color: var(--border);
+  background: var(--surface);
+}
+:is(#write, .article-body) .code-frame > pre:not(.CodeMirror pre) {
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 18px 20px !important;
+  font-size: 13px !important;
+  line-height: 1.8 !important;
+}
+.copy-buffer {
+  position: fixed;
+  top: 0;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+@media (min-width: 1320px) {
+  .reading-outline {
+    position: fixed;
+    top: 122px;
+    left: calc(50% + 420px);
+    width: 210px;
+    margin: 0;
+    border: none;
+    background: transparent;
+  }
+  .reading-outline__summary {
+    padding: 0 10px 14px;
+    min-height: 40px;
+    font-size: 12px;
+  }
+  .reading-outline__nav {
+    max-height: calc(100vh - 225px);
+    padding: 0;
+  }
+  .reading-outline__item a {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    font-size: 12px;
+  }
+}
+@media (max-width: 540px) {
+  .prose {
+    padding-top: 28px;
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+  .prose__header {
+    padding-bottom: 24px;
+    margin-bottom: 24px;
+  }
+  .prose__title {
+    margin-top: 20px;
+    font-size: 28px;
+  }
+  .prose__meta span + span::before {
+    margin: 0 6px;
+  }
+  .reading-outline {
+    margin-bottom: 26px;
+  }
+  .reading-outline__item a {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  :is(#write, .article-body) .code-frame > pre:not(.CodeMirror pre) {
+    padding: 16px !important;
+    font-size: 12px !important;
+  }
+  :is(#write, .article-body) blockquote {
+    padding: 14px 16px !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reading-outline__item a {
+    transition: none;
+  }
+}
+@media print {
+  .reading-outline,
+  .code-frame__toolbar,
+  .reading-summary {
+    display: none !important;
+  }
+  .code-frame {
+    overflow: visible;
+    break-inside: avoid;
+  }
+  :is(#write, .article-body) .code-frame > pre:not(.CodeMirror pre) {
+    white-space: pre-wrap !important;
+  }
 }
