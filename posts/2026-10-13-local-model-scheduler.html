@@ -4,13 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>本地模型调度与云端故障转接 · sanmua</title>
+    <!-- meta: injected by tools/build_index.py (start) --><meta name="description" content="本地 GPU 不是更强的云：用站点冷却、半开熔断和“异步任务只投一次”，把“服务挂了/请求不支持/已投出的账单”三件事拆开记账。" />
+    <link rel="canonical" href="https://www.sanmua.xin/posts/2026-10-13-local-model-scheduler.html" />
+    <meta property="og:site_name" content="sanmua" />
+    <meta property="og:title" content="本地模型调度与云端故障转接" />
+    <meta property="og:description" content="本地 GPU 不是更强的云：用站点冷却、半开熔断和“异步任务只投一次”，把“服务挂了/请求不支持/已投出的账单”三件事拆开记账。" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.sanmua.xin/posts/2026-10-13-local-model-scheduler.html" />
+    <meta property="og:image" content="https://www.sanmua.xin/assets/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="alternate" type="application/rss+xml" title="sanmua" href="/feed.xml" />
+    <script type="application/ld+json">{"@context": "https://schema.org", "@type": "BlogPosting", "headline": "本地模型调度与云端故障转接", "datePublished": "2026-10-13", "description": "本地 GPU 不是更强的云：用站点冷却、半开熔断和“异步任务只投一次”，把“服务挂了/请求不支持/已投出的账单”三件事拆开记账。", "url": "https://www.sanmua.xin/posts/2026-10-13-local-model-scheduler.html", "inLanguage": "zh-CN", "author": {"@type": "Person", "name": "sanmua"}, "publisher": {"@type": "Person", "name": "sanmua"}, "mainEntityOfPage": "https://www.sanmua.xin/posts/2026-10-13-local-model-scheduler.html", "image": "https://www.sanmua.xin/assets/og-image.png", "dateModified": "2026-10-13", "keywords": "Go, AI, 架构", "wordCount": 2076}</script><!-- meta: injected by tools/build_index.py (end) -->
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
     <script src="/assets/js/theme.js?v=fc11f2677e"></script>
     <link rel="stylesheet" href="/assets/css/main.css?v=648a5dd28b" />
     <link rel="stylesheet" href="/assets/css/article.css?v=73ff93b1c9" />
   </head>
   <body>
-    <article class="prose">
+    <a class="skip-link" href="#main">跳到主要内容</a>
+    <main id="main">
+      <article class="prose">
       <header class="prose__header">
         <a class="prose__back" href="/">&larr; 返回首页</a>
         <h1 class="prose__title">本地模型调度与云端故障转接</h1>
@@ -149,6 +162,9 @@ REMOVED_KEYS = ('cfg_scale', 'steps')  # 本地适配器早已忽略这两个字
         <blockquote><p>兜底系统最难的从来不是「挂了之后切过去」，而是冷静地区分：这是服务真挂了、请求本就不被支持、还是一笔已经投出去的账单。本地 GPU 调度器用站点冷却、熔断器和只投一次的异步协议，把这三件事拆开记账——便宜的算力才能真正变成用户手里稳出的图。</p></blockquote>
       </div>
     </article>
-    <script src="/assets/js/main.js?v=9b3f67174b"></script>
+    </main>
+    <script src="/assets/js/main.js?v=5703662ccd"></script>
+      <script defer src="/assets/js/highlight.min.js?v=837a6fa5b0"></script>
+    <script defer src="/assets/js/highlight-run.js?v=91fc8079b5"></script>
   </body>
 </html>

@@ -1,0 +1,19 @@
+{
+  "name": "sanmua · 把好奇写成日常",
+  "short_name": "sanmua",
+  "description": "sanmua 的数字自留地，关于编程、数学，以及生活里值得记录的小事。持续学习，保持好奇。",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f7f2",
+  "theme_color": "#315b49",
+  "icons": [
+    {
+      "src": "/assets/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

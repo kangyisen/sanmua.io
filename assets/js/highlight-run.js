@@ -5,4 +5,8 @@
   document.querySelectorAll("pre code").forEach(function (el) {
     hljs.highlightElement(el);
   });
+  // 兼容个别手写页面里没有 <code> 子元素的裸 <pre> 代码块。
+  document.querySelectorAll("pre").forEach(function (el) {
+    if (!el.querySelector("code")) hljs.highlightElement(el);
+  });
 })();

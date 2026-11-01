@@ -4,13 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>asyncio 两级并发：高吞吐采集器的并发模型与热同步 · sanmua</title>
+    <!-- meta: injected by tools/build_index.py (start) --><meta name="description" content="协程两级并发怎么设计，信号池限流与配置热同步如何不重启生效。" />
+    <link rel="canonical" href="https://www.sanmua.xin/posts/2026-10-04-asyncio-crawler-concurrency.html" />
+    <meta property="og:site_name" content="sanmua" />
+    <meta property="og:title" content="asyncio 两级并发：高吞吐采集器的并发模型与热同步" />
+    <meta property="og:description" content="协程两级并发怎么设计，信号池限流与配置热同步如何不重启生效。" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.sanmua.xin/posts/2026-10-04-asyncio-crawler-concurrency.html" />
+    <meta property="og:image" content="https://www.sanmua.xin/assets/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="alternate" type="application/rss+xml" title="sanmua" href="/feed.xml" />
+    <script type="application/ld+json">{"@context": "https://schema.org", "@type": "BlogPosting", "headline": "asyncio 两级并发：高吞吐采集器的并发模型与热同步", "datePublished": "2026-10-04", "description": "协程两级并发怎么设计，信号池限流与配置热同步如何不重启生效。", "url": "https://www.sanmua.xin/posts/2026-10-04-asyncio-crawler-concurrency.html", "inLanguage": "zh-CN", "author": {"@type": "Person", "name": "sanmua"}, "publisher": {"@type": "Person", "name": "sanmua"}, "mainEntityOfPage": "https://www.sanmua.xin/posts/2026-10-04-asyncio-crawler-concurrency.html", "image": "https://www.sanmua.xin/assets/og-image.png", "dateModified": "2026-10-04", "keywords": "Python, 编程", "wordCount": 1518}</script><!-- meta: injected by tools/build_index.py (end) -->
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
     <script src="/assets/js/theme.js?v=fc11f2677e"></script>
     <link rel="stylesheet" href="/assets/css/main.css?v=648a5dd28b" />
     <link rel="stylesheet" href="/assets/css/article.css?v=73ff93b1c9" />
   </head>
   <body>
-    <article class="prose">
+    <a class="skip-link" href="#main">跳到主要内容</a>
+    <main id="main">
+      <article class="prose">
       <header class="prose__header">
         <a class="prose__back" href="/">&larr; 返回首页</a>
         <h1 class="prose__title">asyncio 两级并发：高吞吐采集器的并发模型与热同步</h1>
@@ -114,6 +127,9 @@ async def crawl_one(name: str, cfg: dict, job: dict,
         <blockquote><p>核心经验：<strong>并发不是"开越多协程越快"，而是"全局控源数、单源控在途、队列做背压、配置在线可调"</strong>。两层信号量 + worker 不是重复造墙，而是分别兜住"对外礼貌"和"内部扇出"；429 退避必须有上限，退避用完放回队尾而不是吞掉任务——被生产环境教出来的细节，都是血泪。</p></blockquote>
       </div>
     </article>
-    <script src="/assets/js/main.js?v=9b3f67174b"></script>
+    </main>
+    <script src="/assets/js/main.js?v=5703662ccd"></script>
+      <script defer src="/assets/js/highlight.min.js?v=837a6fa5b0"></script>
+    <script defer src="/assets/js/highlight-run.js?v=91fc8079b5"></script>
   </body>
 </html>

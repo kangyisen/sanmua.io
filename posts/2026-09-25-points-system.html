@@ -4,13 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>四账户积分记账：余额、冻结、乐观锁与消费优先级 · sanmua</title>
+    <!-- meta: injected by tools/build_index.py (start) --><meta name="description" content="不同生命周期的钱为什么分账户，冻结占额、全条件 UPDATE 与两阶段扣减怎么保证不超扣。" />
+    <link rel="canonical" href="https://www.sanmua.xin/posts/2026-09-25-points-system.html" />
+    <meta property="og:site_name" content="sanmua" />
+    <meta property="og:title" content="四账户积分记账：余额、冻结、乐观锁与消费优先级" />
+    <meta property="og:description" content="不同生命周期的钱为什么分账户，冻结占额、全条件 UPDATE 与两阶段扣减怎么保证不超扣。" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.sanmua.xin/posts/2026-09-25-points-system.html" />
+    <meta property="og:image" content="https://www.sanmua.xin/assets/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="alternate" type="application/rss+xml" title="sanmua" href="/feed.xml" />
+    <script type="application/ld+json">{"@context": "https://schema.org", "@type": "BlogPosting", "headline": "四账户积分记账：余额、冻结、乐观锁与消费优先级", "datePublished": "2026-09-25", "description": "不同生命周期的钱为什么分账户，冻结占额、全条件 UPDATE 与两阶段扣减怎么保证不超扣。", "url": "https://www.sanmua.xin/posts/2026-09-25-points-system.html", "inLanguage": "zh-CN", "author": {"@type": "Person", "name": "sanmua"}, "publisher": {"@type": "Person", "name": "sanmua"}, "mainEntityOfPage": "https://www.sanmua.xin/posts/2026-09-25-points-system.html", "image": "https://www.sanmua.xin/assets/og-image.png", "dateModified": "2026-09-25", "keywords": "Go, 设计", "wordCount": 1568}</script><!-- meta: injected by tools/build_index.py (end) -->
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
     <script src="/assets/js/theme.js?v=fc11f2677e"></script>
     <link rel="stylesheet" href="/assets/css/main.css?v=648a5dd28b" />
     <link rel="stylesheet" href="/assets/css/article.css?v=73ff93b1c9" />
   </head>
   <body>
-    <article class="prose">
+    <a class="skip-link" href="#main">跳到主要内容</a>
+    <main id="main">
+      <article class="prose">
       <header class="prose__header">
         <a class="prose__back" href="/">&larr; 返回首页</a>
         <h1 class="prose__title">四账户积分记账：余额、冻结、乐观锁与消费优先级</h1>
@@ -122,6 +135,9 @@ ReleaseFrozenPoints(...)        // 释放：退回 frozen_*，恢复额度</code
         <blockquote><p>这套设计的核心有两条：<strong>不同生命周期的钱必须放进不同账户</strong>，一个字段存所有积分，迟早会在过期规则和对账上爆炸；以及<strong>「冻结占额 + 乐观锁 + 全条件 UPDATE」</strong>共同保证并发下不超扣、不错扣。余额会骗人，带条件的更新和流水不会。</p></blockquote>
       </div>
     </article>
-    <script src="/assets/js/main.js?v=9b3f67174b"></script>
+    </main>
+    <script src="/assets/js/main.js?v=5703662ccd"></script>
+      <script defer src="/assets/js/highlight.min.js?v=837a6fa5b0"></script>
+    <script defer src="/assets/js/highlight-run.js?v=91fc8079b5"></script>
   </body>
 </html>

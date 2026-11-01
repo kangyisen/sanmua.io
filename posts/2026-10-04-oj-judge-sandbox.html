@@ -4,13 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OJ 判题沙箱：FastAPI 微服务与 Docker 隔离评测 · sanmua</title>
+    <!-- meta: injected by tools/build_index.py (start) --><meta name="description" content="判题为什么解耦成微服务，Docker 容器如何限制 CPU、内存、时间与网络。" />
+    <link rel="canonical" href="https://www.sanmua.xin/posts/2026-10-04-oj-judge-sandbox.html" />
+    <meta property="og:site_name" content="sanmua" />
+    <meta property="og:title" content="OJ 判题沙箱：FastAPI 微服务与 Docker 隔离评测" />
+    <meta property="og:description" content="判题为什么解耦成微服务，Docker 容器如何限制 CPU、内存、时间与网络。" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.sanmua.xin/posts/2026-10-04-oj-judge-sandbox.html" />
+    <meta property="og:image" content="https://www.sanmua.xin/assets/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="alternate" type="application/rss+xml" title="sanmua" href="/feed.xml" />
+    <script type="application/ld+json">{"@context": "https://schema.org", "@type": "BlogPosting", "headline": "OJ 判题沙箱：FastAPI 微服务与 Docker 隔离评测", "datePublished": "2026-10-04", "description": "判题为什么解耦成微服务，Docker 容器如何限制 CPU、内存、时间与网络。", "url": "https://www.sanmua.xin/posts/2026-10-04-oj-judge-sandbox.html", "inLanguage": "zh-CN", "author": {"@type": "Person", "name": "sanmua"}, "publisher": {"@type": "Person", "name": "sanmua"}, "mainEntityOfPage": "https://www.sanmua.xin/posts/2026-10-04-oj-judge-sandbox.html", "image": "https://www.sanmua.xin/assets/og-image.png", "dateModified": "2026-10-04", "keywords": "Python, Docker, 编程", "wordCount": 1728}</script><!-- meta: injected by tools/build_index.py (end) -->
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
     <script src="/assets/js/theme.js?v=fc11f2677e"></script>
     <link rel="stylesheet" href="/assets/css/main.css?v=648a5dd28b" />
     <link rel="stylesheet" href="/assets/css/article.css?v=73ff93b1c9" />
   </head>
   <body>
-    <article class="prose">
+    <a class="skip-link" href="#main">跳到主要内容</a>
+    <main id="main">
+      <article class="prose">
       <header class="prose__header">
         <a class="prose__back" href="/">&larr; 返回首页</a>
         <h1 class="prose__title">OJ 判题沙箱：FastAPI 微服务与 Docker 隔离评测</h1>
@@ -148,6 +161,9 @@ cpu_delta = stats["cpu_stats"]["cpu_usage"]["total_usage"] - \
         <blockquote><p>核心经验：<strong>判题的本质不是「跑代码」，而是「在可信边界内跑不可信代码」</strong>。TLE 不是靠「等它超时」而是靠看门狗与 wait 并发强杀；隔离不是一个 <code>run</code> 参数，而是 <code>mem/cpu/pids/cap_drop/read_only/network</code> 一整套。永远假设用户代码会搞破坏，然后让任何破坏都被关在一个跑完即删的容器里。</p></blockquote>
       </div>
     </article>
-    <script src="/assets/js/main.js?v=9b3f67174b"></script>
+    </main>
+    <script src="/assets/js/main.js?v=5703662ccd"></script>
+      <script defer src="/assets/js/highlight.min.js?v=837a6fa5b0"></script>
+    <script defer src="/assets/js/highlight-run.js?v=91fc8079b5"></script>
   </body>
 </html>

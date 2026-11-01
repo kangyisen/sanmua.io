@@ -438,7 +438,8 @@
     function fetchPosts() {
       postsState = "loading";
       box.setAttribute("aria-busy", "true");
-      box.replaceChildren(element("p", "", "正在翻开手记…"));
+      // 预渲染的静态列表已就位时不再闪占位文案，避免首屏闪烁。
+      if (!box.childElementCount) box.replaceChildren(element("p", "", "正在翻开手记…"));
       fetch("/data/posts.json", { cache: "no-cache" })
         .then(function (response) {
           if (!response.ok) throw new Error("Unable to load posts");

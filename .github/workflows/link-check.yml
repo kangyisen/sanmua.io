@@ -1,0 +1,36 @@
+name: 外链检查
+
+# 每周例行检查全站 HTML / RSS / sitemap 里的外部链接是否失效。
+# 只做报告，不阻塞任何流程：结果见 Actions 日志与构建产物里的报告文件。
+on:
+  schedule:
+    - cron: "0 3 * * 1" # 每周一 03:00 UTC
+  workflow_dispatch:
+
+jobs:
+  link-check:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+        with:
+          ref: "666"
+
+      - name: 检查外链
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --no-progress
+            --max-retries 2
+            --timeout 20
+            './**/*.html' 'feed.xml' 'sitemap.xml'
+          fail: false
+          output: ./lychee-report.md
+
+      - name: 归档报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 外链检查报告
+          path: ./lychee-report.md

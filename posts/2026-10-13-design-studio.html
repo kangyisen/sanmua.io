@@ -4,13 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>设计工作台：SSE 流式生成、异步消息与预设体系 · sanmua</title>
+    <!-- meta: injected by tools/build_index.py (start) --><meta name="description" content="从 notifyChannel 空 struct 通知、WatchSession 的 snapshot/progress/done/reconnect 协议，到部分结果落库与预设乐观锁，拆解设计室如何让长 AI 任务在断连后可恢复。" />
+    <link rel="canonical" href="https://www.sanmua.xin/posts/2026-10-13-design-studio.html" />
+    <meta property="og:site_name" content="sanmua" />
+    <meta property="og:title" content="设计工作台：SSE 流式生成、异步消息与预设体系" />
+    <meta property="og:description" content="从 notifyChannel 空 struct 通知、WatchSession 的 snapshot/progress/done/reconnect 协议，到部分结果落库与预设乐观锁，拆解设计室如何让长 AI 任务在断连后可恢复。" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.sanmua.xin/posts/2026-10-13-design-studio.html" />
+    <meta property="og:image" content="https://www.sanmua.xin/assets/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="alternate" type="application/rss+xml" title="sanmua" href="/feed.xml" />
+    <script type="application/ld+json">{"@context": "https://schema.org", "@type": "BlogPosting", "headline": "设计工作台：SSE 流式生成、异步消息与预设体系", "datePublished": "2026-10-13", "description": "从 notifyChannel 空 struct 通知、WatchSession 的 snapshot/progress/done/reconnect 协议，到部分结果落库与预设乐观锁，拆解设计室如何让长 AI 任务在断连后可恢复。", "url": "https://www.sanmua.xin/posts/2026-10-13-design-studio.html", "inLanguage": "zh-CN", "author": {"@type": "Person", "name": "sanmua"}, "publisher": {"@type": "Person", "name": "sanmua"}, "mainEntityOfPage": "https://www.sanmua.xin/posts/2026-10-13-design-studio.html", "image": "https://www.sanmua.xin/assets/og-image.png", "dateModified": "2026-10-13", "keywords": "Go, AI, 设计", "wordCount": 2553}</script><!-- meta: injected by tools/build_index.py (end) -->
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
     <script src="/assets/js/theme.js?v=fc11f2677e"></script>
     <link rel="stylesheet" href="/assets/css/main.css?v=648a5dd28b" />
     <link rel="stylesheet" href="/assets/css/article.css?v=73ff93b1c9" />
   </head>
   <body>
-    <article class="prose">
+    <a class="skip-link" href="#main">跳到主要内容</a>
+    <main id="main">
+      <article class="prose">
       <header class="prose__header">
         <a class="prose__back" href="/">&larr; 返回首页</a>
         <h1 class="prose__title">设计工作台：SSE 流式生成、异步消息与预设体系</h1>
@@ -119,6 +132,9 @@ if result.RowsAffected != 1 {
         <blockquote><p>设计室的 SSE 不是传输层优化，而是一句承诺：连接可以断、前端可以慢、甚至出图可以失败一半，但只要任务已经受理，数据库里的状态就永远是最新的，用户回到 App 时看到的就是真相。</p></blockquote>
       </div>
     </article>
-    <script src="/assets/js/main.js?v=9b3f67174b"></script>
+    </main>
+    <script src="/assets/js/main.js?v=5703662ccd"></script>
+      <script defer src="/assets/js/highlight.min.js?v=837a6fa5b0"></script>
+    <script defer src="/assets/js/highlight-run.js?v=91fc8079b5"></script>
   </body>
 </html>

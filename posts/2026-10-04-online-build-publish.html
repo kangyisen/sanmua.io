@@ -4,13 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI 游戏工程的在线构建、发布与权限设计 · sanmua</title>
+    <!-- meta: injected by tools/build_index.py (start) --><meta name="description" content="工程生成、在线构建发布、模型中心与数据看板，JWT+Casbin 如何把权限粒度做到菜单和接口。" />
+    <link rel="canonical" href="https://www.sanmua.xin/posts/2026-10-04-online-build-publish.html" />
+    <meta property="og:site_name" content="sanmua" />
+    <meta property="og:title" content="AI 游戏工程的在线构建、发布与权限设计" />
+    <meta property="og:description" content="工程生成、在线构建发布、模型中心与数据看板，JWT+Casbin 如何把权限粒度做到菜单和接口。" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.sanmua.xin/posts/2026-10-04-online-build-publish.html" />
+    <meta property="og:image" content="https://www.sanmua.xin/assets/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="alternate" type="application/rss+xml" title="sanmua" href="/feed.xml" />
+    <script type="application/ld+json">{"@context": "https://schema.org", "@type": "BlogPosting", "headline": "AI 游戏工程的在线构建、发布与权限设计", "datePublished": "2026-10-04", "description": "工程生成、在线构建发布、模型中心与数据看板，JWT+Casbin 如何把权限粒度做到菜单和接口。", "url": "https://www.sanmua.xin/posts/2026-10-04-online-build-publish.html", "inLanguage": "zh-CN", "author": {"@type": "Person", "name": "sanmua"}, "publisher": {"@type": "Person", "name": "sanmua"}, "mainEntityOfPage": "https://www.sanmua.xin/posts/2026-10-04-online-build-publish.html", "image": "https://www.sanmua.xin/assets/og-image.png", "dateModified": "2026-10-04", "keywords": "Go, 架构, 编程", "wordCount": 1321}</script><!-- meta: injected by tools/build_index.py (end) -->
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
     <script src="/assets/js/theme.js?v=fc11f2677e"></script>
     <link rel="stylesheet" href="/assets/css/main.css?v=648a5dd28b" />
     <link rel="stylesheet" href="/assets/css/article.css?v=73ff93b1c9" />
   </head>
   <body>
-    <article class="prose">
+    <a class="skip-link" href="#main">跳到主要内容</a>
+    <main id="main">
+      <article class="prose">
       <header class="prose__header">
         <a class="prose__back" href="/">&larr; 返回首页</a>
         <h1 class="prose__title">AI 游戏工程的在线构建、发布与权限设计</h1>
@@ -135,6 +148,9 @@ func RequirePermission(obj, act string) gin.HandlerFunc {
         <blockquote><p>核心经验：<strong>JWT 负责「你是谁」，Casbin 负责「你能做什么」，策略挂角色、用户用 g 继承</strong>。在线构建本质是个异步状态机，慢操作一律任务化，配合信号量并发上限、context 取消和僵尸任务定时兜底；权限必须落到后端接口，前端显示只是顺带。加角色、开菜单因此成了配置问题，而不是开发任务。</p></blockquote>
       </div>
     </article>
-    <script src="/assets/js/main.js?v=9b3f67174b"></script>
+    </main>
+    <script src="/assets/js/main.js?v=5703662ccd"></script>
+      <script defer src="/assets/js/highlight.min.js?v=837a6fa5b0"></script>
+    <script defer src="/assets/js/highlight-run.js?v=91fc8079b5"></script>
   </body>
 </html>

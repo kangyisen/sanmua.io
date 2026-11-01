@@ -4,13 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>采集可靠性：outbox、崩溃恢复、优雅停机与看门狗 · sanmua</title>
+    <!-- meta: injected by tools/build_index.py (start) --><meta name="description" content="SQLite outbox、崩溃自动恢复与优雅停机，Redis 去重与 Lua 看门狗如何重放熔断。" />
+    <link rel="canonical" href="https://www.sanmua.xin/posts/2026-10-04-crawler-reliability.html" />
+    <meta property="og:site_name" content="sanmua" />
+    <meta property="og:title" content="采集可靠性：outbox、崩溃恢复、优雅停机与看门狗" />
+    <meta property="og:description" content="SQLite outbox、崩溃自动恢复与优雅停机，Redis 去重与 Lua 看门狗如何重放熔断。" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.sanmua.xin/posts/2026-10-04-crawler-reliability.html" />
+    <meta property="og:image" content="https://www.sanmua.xin/assets/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="alternate" type="application/rss+xml" title="sanmua" href="/feed.xml" />
+    <script type="application/ld+json">{"@context": "https://schema.org", "@type": "BlogPosting", "headline": "采集可靠性：outbox、崩溃恢复、优雅停机与看门狗", "datePublished": "2026-10-04", "description": "SQLite outbox、崩溃自动恢复与优雅停机，Redis 去重与 Lua 看门狗如何重放熔断。", "url": "https://www.sanmua.xin/posts/2026-10-04-crawler-reliability.html", "inLanguage": "zh-CN", "author": {"@type": "Person", "name": "sanmua"}, "publisher": {"@type": "Person", "name": "sanmua"}, "mainEntityOfPage": "https://www.sanmua.xin/posts/2026-10-04-crawler-reliability.html", "image": "https://www.sanmua.xin/assets/og-image.png", "dateModified": "2026-10-04", "keywords": "Python, 编程", "wordCount": 1531}</script><!-- meta: injected by tools/build_index.py (end) -->
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
     <script src="/assets/js/theme.js?v=fc11f2677e"></script>
     <link rel="stylesheet" href="/assets/css/main.css?v=648a5dd28b" />
     <link rel="stylesheet" href="/assets/css/article.css?v=73ff93b1c9" />
   </head>
   <body>
-    <article class="prose">
+    <a class="skip-link" href="#main">跳到主要内容</a>
+    <main id="main">
+      <article class="prose">
       <header class="prose__header">
         <a class="prose__back" href="/">&larr; 返回首页</a>
         <h1 class="prose__title">采集可靠性：outbox、崩溃恢复、优雅停机与看门狗</h1>
@@ -124,6 +137,9 @@ return "alive"
         <blockquote><p>核心经验：<strong>可靠性的本质是"任何时刻进程突然死掉，系统都能从磁盘上的状态自愈"</strong>。outbox 先落库不丢任务，WAL 让 SQLite 在 asyncio 下不卡不锁，优雅停机不腰斩在途任务，看门狗 + 幂等重放让卡死任务不被遗忘、也不被重复发。跨存储状态以 outbox 为准——Redis 会误报，SQLite 的条件更新不会。</p></blockquote>
       </div>
     </article>
-    <script src="/assets/js/main.js?v=9b3f67174b"></script>
+    </main>
+    <script src="/assets/js/main.js?v=5703662ccd"></script>
+      <script defer src="/assets/js/highlight.min.js?v=837a6fa5b0"></script>
+    <script defer src="/assets/js/highlight-run.js?v=91fc8079b5"></script>
   </body>
 </html>

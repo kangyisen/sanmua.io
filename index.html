@@ -20,6 +20,7 @@
     <link rel="canonical" href="https://www.sanmua.xin/" />
     <link rel="alternate" type="application/rss+xml" title="sanmua" href="/feed.xml" />
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/site.webmanifest" />
     <script src="/assets/js/theme.js?v=fc11f2677e"></script>
     <link rel="stylesheet" href="/assets/css/main.css?v=648a5dd28b" />
   </head>
@@ -112,7 +113,7 @@
               >手记归档</span
             >
           </header>
-          <div id="latestPost" class="journal-feature" hidden></div>
+          <div id="latestPost" class="journal-feature"><!--prerender:LATEST:start--><a class="feature-link" href="/posts/2026-10-19-personal-reflections/"><div class="feature-kicker"><span class="feature-label">最新手记</span><span>A NEW PAGE IN THE JOURNAL</span></div><h3>个人感悟</h3><p>在考研与就业的岔路口，在技术更迭的浪潮里，学着与迷茫同行，依旧心怀山海。</p><div class="feature-bottom"><time datetime="2026-10-19">2026.10.19</time><span>随笔 · 约 5 分钟</span><strong>翻开这一页 ↗</strong></div></a><!--prerender:LATEST:end--></div>
           <div class="journal-tools">
             <div class="filters" aria-label="按文章分类筛选">
               <button
@@ -169,7 +170,7 @@
             <label class="sort-control"><span class="sr-only">文章排序</span><select id="postSort" aria-label="文章排序"><option value="newest">最新在前</option><option value="oldest">最早在前</option></select></label>
           </div>
           <p class="search-status" id="searchStatus" role="status" aria-live="polite" aria-atomic="true">每一篇，都是好奇心留下的脚印。</p>
-          <div class="js-posts post-list" id="postList" aria-label="手记列表"><p>正在翻开手记…</p></div>
+          <div class="js-posts post-list" id="postList" aria-label="手记列表"><!--prerender:POSTS:start--><a class="post-item" href="/posts/2026-10-13-markdown-publishing/"><div class="post-item__main"><div class="post-item__meta"><span class="post-item__tag">编程</span><time datetime="2026-10-13">2026.10.13</time><span>约 5 分钟</span></div><h3>博客改造：只写 Markdown，剩下的交给脚本与 Actions</h3><p class="post-item__excerpt">新增一篇文章不再需要手写 HTML：一个 .md 文件、一个通用 viewer、自动生成的 posts.json，外加一条 push 时自动更新索引的 Actions。</p><div class="post-item__bottom"><span>编程 / 设计</span><span>阅读全文 ↗</span></div></div><div class="post-art post-art--code" aria-hidden="true">&lt;/&gt;<small>CODE NOTES</small></div></a><a class="post-item" href="/posts/2026-10-13-ai-drawing-gateway.html"><div class="post-item__main"><div class="post-item__meta"><span class="post-item__tag">编程</span><time datetime="2026-10-13">2026.10.13</time><span>约 8 分钟</span></div><h3>多供应商 AI 绘图网关：统一抽象与错误码字典</h3><p class="post-item__excerpt">一套 Template 入口、一个 map 出参、一张 switch 路由表、一本十家厂商错误码字典，外加一句永远体面的兜底话术。</p><div class="post-item__bottom"><span>Go / AI / 架构</span><span>阅读全文 ↗</span></div></div><div class="post-art post-art--code" aria-hidden="true">&lt;/&gt;<small>CODE NOTES</small></div></a><a class="post-item" href="/posts/2026-10-13-local-model-scheduler.html"><div class="post-item__main"><div class="post-item__meta"><span class="post-item__tag">编程</span><time datetime="2026-10-13">2026.10.13</time><span>约 7 分钟</span></div><h3>本地模型调度与云端故障转接</h3><p class="post-item__excerpt">本地 GPU 不是更强的云：用站点冷却、半开熔断和“异步任务只投一次”，把“服务挂了/请求不支持/已投出的账单”三件事拆开记账。</p><div class="post-item__bottom"><span>Go / AI / 架构</span><span>阅读全文 ↗</span></div></div><div class="post-art post-art--code" aria-hidden="true">&lt;/&gt;<small>CODE NOTES</small></div></a><a class="post-item" href="/posts/2026-10-13-content-audit-routing.html"><div class="post-item__main"><div class="post-item__meta"><span class="post-item__tag">编程</span><time datetime="2026-10-13">2026.10.13</time><span>约 9 分钟</span></div><h3>AI 内容审核：多供应商可配置路由</h3><p class="post-item__excerpt">百度/阿里云图/阿里云文/火山方舟四家审核器收敛成同一个 Auditor 接口，后台可配、按权限收口的模型故障转移链，审核抖动时放行而不打挂修图主流程。</p><div class="post-item__bottom"><span>Go / AI / 安全</span><span>阅读全文 ↗</span></div></div><div class="post-art post-art--code" aria-hidden="true">&lt;/&gt;<small>CODE NOTES</small></div></a><a class="post-item" href="/posts/2026-10-13-card-redemption.html"><div class="post-item__main"><div class="post-item__meta"><span class="post-item__tag">编程</span><time datetime="2026-10-13">2026.10.13</time><span>约 8 分钟</span></div><h3>卡密兑换系统：加密码、短信登录与公开兑换</h3><p class="post-item__excerpt">明文卡密只在生成与导出的瞬间存在，库里躺着的是 SHA-256 指纹和 AES-GCM 密文，兑换靠指纹定位、事务兜底幂等。</p><div class="post-item__bottom"><span>Go / 安全 / 设计</span><span>阅读全文 ↗</span></div></div><div class="post-art post-art--code" aria-hidden="true">&lt;/&gt;<small>CODE NOTES</small></div></a><a class="post-item" href="/posts/2026-10-13-design-studio.html"><div class="post-item__main"><div class="post-item__meta"><span class="post-item__tag">编程</span><time datetime="2026-10-13">2026.10.13</time><span>约 9 分钟</span></div><h3>设计工作台：SSE 流式生成、异步消息与预设体系</h3><p class="post-item__excerpt">从 notifyChannel 空 struct 通知、WatchSession 的 snapshot/progress/done/reconnect 协议，到部分结果落库与预设乐观锁，拆解设计室如何让长 AI 任务在断连后可恢复。</p><div class="post-item__bottom"><span>Go / AI / 设计</span><span>阅读全文 ↗</span></div></div><div class="post-art post-art--code" aria-hidden="true">&lt;/&gt;<small>CODE NOTES</small></div></a><!--prerender:POSTS:end--></div>
           <div class="journal-pagination" id="postPagination" hidden>
             <p id="browseStatus"></p>
             <button class="load-more" id="loadMore" type="button" aria-controls="postList">再翻几篇 <span aria-hidden="true">↓</span></button>
@@ -249,6 +250,6 @@
         <small>THANKS FOR STOPPING BY</small>
       </div>
     </main>
-    <script src="/assets/js/main.js?v=9b3f67174b"></script>
+    <script src="/assets/js/main.js?v=5703662ccd"></script>
   </body>
 </html>

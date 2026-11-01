@@ -4,13 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>多渠道支付回调与幂等履约：订单管线设计笔记 · sanmua</title>
+    <!-- meta: injected by tools/build_index.py (start) --><meta name="description" content="微信/支付宝/Apple/Google 回调怎么验签，策略模式分发履约，以及幂等三件套。" />
+    <link rel="canonical" href="https://www.sanmua.xin/posts/2026-09-25-payment-fulfillment.html" />
+    <meta property="og:site_name" content="sanmua" />
+    <meta property="og:title" content="多渠道支付回调与幂等履约：订单管线设计" />
+    <meta property="og:description" content="微信/支付宝/Apple/Google 回调怎么验签，策略模式分发履约，以及幂等三件套。" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.sanmua.xin/posts/2026-09-25-payment-fulfillment.html" />
+    <meta property="og:image" content="https://www.sanmua.xin/assets/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="alternate" type="application/rss+xml" title="sanmua" href="/feed.xml" />
+    <script type="application/ld+json">{"@context": "https://schema.org", "@type": "BlogPosting", "headline": "多渠道支付回调与幂等履约：订单管线设计", "datePublished": "2026-09-25", "description": "微信/支付宝/Apple/Google 回调怎么验签，策略模式分发履约，以及幂等三件套。", "url": "https://www.sanmua.xin/posts/2026-09-25-payment-fulfillment.html", "inLanguage": "zh-CN", "author": {"@type": "Person", "name": "sanmua"}, "publisher": {"@type": "Person", "name": "sanmua"}, "mainEntityOfPage": "https://www.sanmua.xin/posts/2026-09-25-payment-fulfillment.html", "image": "https://www.sanmua.xin/assets/og-image.png", "dateModified": "2026-09-25", "keywords": "Go, 支付", "wordCount": 2139}</script><!-- meta: injected by tools/build_index.py (end) -->
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
     <script src="/assets/js/theme.js?v=fc11f2677e"></script>
     <link rel="stylesheet" href="/assets/css/main.css?v=648a5dd28b" />
     <link rel="stylesheet" href="/assets/css/article.css?v=73ff93b1c9" />
   </head>
   <body>
-    <article class="prose">
+    <a class="skip-link" href="#main">跳到主要内容</a>
+    <main id="main">
+      <article class="prose">
       <header class="prose__header">
         <a class="prose__back" href="/">&larr; 返回首页</a>
         <h1 class="prose__title">多渠道支付回调与幂等履约：订单管线设计笔记</h1>
@@ -154,6 +167,9 @@ pkg, err := subscribe.GetPackageByStoreProductId(op.AppId, op.ThirdProductId, pl
         <blockquote><p>支付系统的目标其实就一句话：<strong>无论回调来几次、乱序来、重复来，最终结果都和「来一次」完全一样</strong>。订单 / 履约状态机 + 分布式锁 + 两级幂等 + 履约快照凑齐，基本就稳了；而不同渠道「金额严格还是校正」这种差异，必须顺着各自的事实来源来，不能一刀切。</p></blockquote>
       </div>
     </article>
-    <script src="/assets/js/main.js?v=9b3f67174b"></script>
+    </main>
+    <script src="/assets/js/main.js?v=5703662ccd"></script>
+      <script defer src="/assets/js/highlight.min.js?v=837a6fa5b0"></script>
+    <script defer src="/assets/js/highlight-run.js?v=91fc8079b5"></script>
   </body>
 </html>

@@ -59,6 +59,7 @@ jobs:
       - name: 有变化则提交并推送
         run: |
           git add data/posts.json data/search.json archives.html sitemap.xml feed.xml
+          git add index.html
           git add -A posts/
           git add -u -- '*.html'
           if git diff --cached --quiet; then

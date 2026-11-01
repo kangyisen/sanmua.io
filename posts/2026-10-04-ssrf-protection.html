@@ -4,13 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>自研 SSRF 防护层：把 URL 抓取关进笼子 · sanmua</title>
+    <!-- meta: injected by tools/build_index.py (start) --><meta name="description" content="内网地址、DNS rebinding、重定向绕过，URL 抓取前的安全校验怎么一层层堵。" />
+    <link rel="canonical" href="https://www.sanmua.xin/posts/2026-10-04-ssrf-protection.html" />
+    <meta property="og:site_name" content="sanmua" />
+    <meta property="og:title" content="自研 SSRF 防护层：把 URL 抓取关进笼子" />
+    <meta property="og:description" content="内网地址、DNS rebinding、重定向绕过，URL 抓取前的安全校验怎么一层层堵。" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://www.sanmua.xin/posts/2026-10-04-ssrf-protection.html" />
+    <meta property="og:image" content="https://www.sanmua.xin/assets/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="alternate" type="application/rss+xml" title="sanmua" href="/feed.xml" />
+    <script type="application/ld+json">{"@context": "https://schema.org", "@type": "BlogPosting", "headline": "自研 SSRF 防护层：把 URL 抓取关进笼子", "datePublished": "2026-10-04", "description": "内网地址、DNS rebinding、重定向绕过，URL 抓取前的安全校验怎么一层层堵。", "url": "https://www.sanmua.xin/posts/2026-10-04-ssrf-protection.html", "inLanguage": "zh-CN", "author": {"@type": "Person", "name": "sanmua"}, "publisher": {"@type": "Person", "name": "sanmua"}, "mainEntityOfPage": "https://www.sanmua.xin/posts/2026-10-04-ssrf-protection.html", "image": "https://www.sanmua.xin/assets/og-image.png", "dateModified": "2026-10-04", "keywords": "Python, 安全, 编程", "wordCount": 1487}</script><!-- meta: injected by tools/build_index.py (end) -->
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
     <script src="/assets/js/theme.js?v=fc11f2677e"></script>
     <link rel="stylesheet" href="/assets/css/main.css?v=648a5dd28b" />
     <link rel="stylesheet" href="/assets/css/article.css?v=73ff93b1c9" />
   </head>
   <body>
-    <article class="prose">
+    <a class="skip-link" href="#main">跳到主要内容</a>
+    <main id="main">
+      <article class="prose">
       <header class="prose__header">
         <a class="prose__back" href="/">&larr; 返回首页</a>
         <h1 class="prose__title">自研 SSRF 防护层：把 URL 抓取关进笼子</h1>
@@ -131,6 +144,9 @@ def check_port_and_meta(u) -&gt; None:
         <blockquote><p>核心经验：<strong>SSRF 防护没有"一次校验就万事大吉"，它是一串必须层层独立成立的闸门</strong>。协议、userinfo、IP 伪装归一、公网归属、DNS 一致性、每一跳重定向、元数据与端口——任何一层偷懒前面全白费。HTTPS 锁 IP 时别忘带 SNI，否则安全做到了、请求却连不通。把 URL 抓取关进笼子，就是让它无论如何都跑不出你画好的那个公网白名单。</p></blockquote>
       </div>
     </article>
-    <script src="/assets/js/main.js?v=9b3f67174b"></script>
+    </main>
+    <script src="/assets/js/main.js?v=5703662ccd"></script>
+      <script defer src="/assets/js/highlight.min.js?v=837a6fa5b0"></script>
+    <script defer src="/assets/js/highlight-run.js?v=91fc8079b5"></script>
   </body>
 </html>
